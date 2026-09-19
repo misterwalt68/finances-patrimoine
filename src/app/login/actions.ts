@@ -23,6 +23,7 @@ export async function envoyerLienMagique(
   });
 
   if (error) {
+    console.error("[envoyerLienMagique]", error.status, error.code, error.message);
     return { envoye: false, erreur: "Envoi impossible. Réessaie." };
   }
 
