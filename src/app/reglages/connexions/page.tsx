@@ -6,7 +6,8 @@ import { institutions } from "@/db/schema";
 import { Carte, Badge } from "@/components/ui/carte";
 import { MarkdownSimple } from "@/lib/markdown-simple";
 import { CONNEXIONS_CONNUES, statutConnexion } from "@/lib/connexions";
-import { connecterBanque, ASPSP_PAR_BANQUE } from "./actions";
+import { connecterBanque } from "./actions";
+import { ASPSP_PAR_BANQUE } from "./banques";
 import { EB_SANDBOX } from "@/lib/enable-banking/client";
 
 type CompteBancaireExterne = { uid: string; nom: string | null; iban: string | null; devise: string | null };
