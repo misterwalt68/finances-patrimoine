@@ -48,12 +48,27 @@ export function IconeCrypto({ code, className }: { code: string; className?: str
   );
 }
 
-// Même couleur que la famille "cash" dans le camembert (src/app/patrimoine/
-// camembert.tsx) — c'est l'identité de la famille "Comptes", pas d'une
-// banque en particulier (jamais de logo de marque, cf. SPEC.md).
+// Couleur de repli de la famille "cash" dans le camembert (src/app/
+// patrimoine/camembert.tsx), utilisée seulement quand aucun logo de banque
+// n'est disponible pour ce compte.
 const COULEUR_BANQUE = "#9085e9";
 
-export function IconeBanque({ className }: { className?: string }) {
+/** Vrais logos de banque, un par établissement DSP2 connu (public/logos/). */
+const LOGOS_BANQUE: Record<string, string> = {
+  boursobank: "/logos/boursobank.png",
+  trade_republic: "/logos/trade-republic.png",
+};
+
+export function IconeBanque({ identifiantExterne, className }: { identifiantExterne?: string | null; className?: string }) {
+  const logo = identifiantExterne ? LOGOS_BANQUE[identifiantExterne] : undefined;
+
+  if (logo) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- icône 20px, next/image serait disproportionné
+      <img src={logo} alt="" aria-hidden className={`inline-block shrink-0 rounded-full object-cover ${className ?? "h-5 w-5"}`} />
+    );
+  }
+
   return (
     <span
       aria-hidden
@@ -82,6 +97,6 @@ export function IconeActif({
 }): ReactNode {
   if (type === "metal" && identifiantExterne) return <IconeMetal symbole={identifiantExterne} />;
   if (type === "crypto" && identifiantExterne) return <IconeCrypto code={identifiantExterne} />;
-  if (type === "cash") return <IconeBanque />;
+  if (type === "cash") return <IconeBanque identifiantExterne={identifiantExterne} />;
   return null;
 }
