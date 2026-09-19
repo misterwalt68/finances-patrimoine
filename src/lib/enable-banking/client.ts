@@ -147,8 +147,10 @@ export type TransactionBancaire = {
   /**
    * Identifiant stable pour éviter les doublons entre deux synchros —
    * `transaction_id` est vérifié en direct comme toujours `null` chez
-   * BoursoBank, `entry_reference` (la référence interne banque) est en
-   * revanche toujours présent et stable, donc utilisé à la place.
+   * BoursoBank et Trade Republic, `entry_reference` (la référence interne
+   * banque) est utilisé à la place quand il est présent (BoursoBank).
+   * Trade Republic (beta chez Enable Banking) ne fournit aucun des deux :
+   * un identifiant de repli est alors reconstruit (cf. plus bas).
    */
   identifiantExterne: string | null;
   date: string | null;
@@ -186,14 +188,32 @@ export async function obtenirTransactionsBancaires(
 
   const brut = await requeteEnableBanking<ReponseBrute>(chemin, { sandbox });
 
+  // Repli quand la banque ne fournit aucune référence stable (Trade
+  // Republic) : date + montant + rang d'apparition parmi les transactions
+  // identiques du même jour dans cette page. Stable d'une synchro à l'autre
+  // tant que la banque renvoie ce jour-là dans le même ordre — inévitable en
+  // l'absence de tout identifiant fourni par la banque elle-même.
+  const rangParCle = new Map<string, number>();
+
   return {
     transactions: brut.transactions.map((t) => {
       const montantAbsolu = Number(t.transaction_amount.amount);
       const signe = t.credit_debit_indicator === "DBIT" ? -1 : 1;
+      const montant = montantAbsolu * signe;
+      const date = t.transaction_date ?? t.booking_date ?? t.value_date ?? null;
+
+      let identifiantExterne = t.entry_reference ?? null;
+      if (!identifiantExterne && date) {
+        const cle = `${date}|${montant}`;
+        const rang = rangParCle.get(cle) ?? 0;
+        rangParCle.set(cle, rang + 1);
+        identifiantExterne = `repli:${compteUid}:${cle}|${rang}`;
+      }
+
       return {
-        identifiantExterne: t.entry_reference ?? null,
-        date: t.transaction_date ?? t.booking_date ?? t.value_date ?? null,
-        montant: montantAbsolu * signe,
+        identifiantExterne,
+        date,
+        montant,
         devise: t.transaction_amount.currency,
         libelle: t.remittance_information?.join(" ") ?? t.creditor?.name ?? t.debtor?.name ?? null,
       };

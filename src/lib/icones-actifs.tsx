@@ -63,9 +63,17 @@ export function IconeBanque({ identifiantExterne, className }: { identifiantExte
   const logo = identifiantExterne ? LOGOS_BANQUE[identifiantExterne] : undefined;
 
   if (logo) {
+    // Badge blanc rond (les logos fournis ont un fond blanc plein, pas
+    // transparent) : `object-contain` centre le mark sans le rogner, quel
+    // que soit le format d'origine de chaque logo.
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- icône 20px, next/image serait disproportionné
-      <img src={logo} alt="" aria-hidden className={`inline-block shrink-0 rounded-full object-cover ${className ?? "h-5 w-5"}`} />
+      <span
+        aria-hidden
+        className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-0.5 ${className ?? "h-5 w-5"}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- icône 20px, next/image serait disproportionné */}
+        <img src={logo} alt="" className="h-full w-full object-contain" />
+      </span>
     );
   }
 
