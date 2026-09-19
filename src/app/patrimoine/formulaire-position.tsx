@@ -98,15 +98,14 @@ export function FormulairePosition({
 
             {metalSymbole && (
               <>
-                <ChampSelect label="Compte" name="compteId" required defaultValue="">
+                <ChampSelect label="Type" name="note" required defaultValue="">
                   <option value="" disabled>
                     Choisir…
                   </option>
-                  {listeComptes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
-                    </option>
-                  ))}
+                  <option value="Pièce">Pièce</option>
+                  <option value="Lingotin">Lingotin</option>
+                  <option value="Bijou">Bijou</option>
+                  <option value="Autre">Autre</option>
                 </ChampSelect>
                 <Champ
                   label="Poids (grammes)"
@@ -127,13 +126,6 @@ export function FormulairePosition({
                   onChange={(e) => setPrixAchatTotal(e.target.value)}
                 />
                 <input type="hidden" name="prixRevientMoyen" value={prixParGramme} />
-                <ChampSelect label="Type" name="note" defaultValue="">
-                  <option value="">Choisir…</option>
-                  <option value="Pièce">Pièce</option>
-                  <option value="Lingotin">Lingotin</option>
-                  <option value="Bijou">Bijou</option>
-                  <option value="Autre">Autre</option>
-                </ChampSelect>
                 <Champ label="Date d'achat" name="dateAcquisition" type="date" />
               </>
             )}

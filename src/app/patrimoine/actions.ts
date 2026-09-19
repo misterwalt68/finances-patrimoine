@@ -32,17 +32,30 @@ async function trouverOuCreerActifMetal(symbole: string) {
   return cree;
 }
 
+/**
+ * Compte physique unique pour les métaux — pas la peine de le redemander à
+ * chaque ajout, il n'y en a qu'un. Décision de Maxime : la question du
+ * compte n'a de sens que s'il y a un choix réel.
+ */
+async function obtenirCompteMetauxPhysiques() {
+  const [compte] = await db.select().from(comptes).where(eq(comptes.libelle, "Métaux physiques"));
+  if (!compte) throw new Error('Compte "Métaux physiques" introuvable — à créer dans les réglages.');
+  return compte;
+}
+
 export async function creerPosition(formData: FormData) {
-  const compteId = String(formData.get("compteId") ?? "").trim();
   const metalSymbole = String(formData.get("metalSymbole") ?? "").trim();
   const actifIdBrut = String(formData.get("actifId") ?? "").trim();
+  const compteIdBrut = String(formData.get("compteId") ?? "").trim();
   const quantite = String(formData.get("quantite") ?? "").trim();
   const prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
-  if (!compteId || !quantite || (!actifIdBrut && !metalSymbole)) return;
+  if (!quantite || (!actifIdBrut && !metalSymbole)) return;
+  if (!metalSymbole && !compteIdBrut) return;
 
   const actifId = metalSymbole ? (await trouverOuCreerActifMetal(metalSymbole)).id : actifIdBrut;
+  const compteId = metalSymbole ? (await obtenirCompteMetauxPhysiques()).id : compteIdBrut;
 
   await db.insert(positions).values({
     compteId,
