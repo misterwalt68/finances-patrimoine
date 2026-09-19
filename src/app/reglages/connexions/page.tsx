@@ -23,7 +23,11 @@ export default async function PageConnexions({
     searchParams,
   ]);
 
-  const banquesConnectees = institutionsPsd2.filter((i) => i.methodeConnexion === "psd2");
+  // La vraie source de vérité, c'est la présence d'une session Enable Banking
+  // active — pas l'étiquette `methodeConnexion`, qui peut être "psd2" sur un
+  // établissement jamais réellement connecté (aspiration) ou rester "manuel"
+  // sur un établissement pourtant déjà connecté (donnée pré-existante).
+  const banquesConnectees = institutionsPsd2.filter((i) => Boolean(i.enableBankingSessionId));
 
   return (
     <div className="space-y-6">
@@ -87,13 +91,16 @@ export default async function PageConnexions({
 
         {banquesConnectees.length > 0 && (
           <div className="mt-4 space-y-3 border-t border-line pt-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+              Comptes connectés
+            </p>
             {banquesConnectees.map((b) => {
               const comptesExternes = (b.enableBankingComptes as CompteBancaireExterne[] | null) ?? [];
               return (
                 <div key={b.id}>
                   <p className="flex items-center gap-2 font-medium text-foreground">
                     {b.nom}
-                    <Badge>{b.consentementEtat ?? "absent"}</Badge>
+                    <Badge>{b.consentementEtat ?? "actif"}</Badge>
                   </p>
                   {b.consentementExpireLe && (
                     <p className="mt-0.5 text-xs text-muted">

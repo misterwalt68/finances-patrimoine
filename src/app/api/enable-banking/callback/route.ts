@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       await db
         .update(institutions)
         .set({
+          methodeConnexion: "psd2",
           consentementEtat: "actif",
           consentementExpireLe: session.validJusqua.slice(0, 10),
           enableBankingSessionId: session.sessionId,
