@@ -35,6 +35,7 @@ type CompteCoinbaseBrut = {
   name: string;
   currency: string;
   available_balance: { value: string; currency: string };
+  hold?: { value: string; currency: string };
   active: boolean;
 };
 
@@ -50,9 +51,17 @@ export type SoldeCoinbase = {
   nomCompte: string;
 };
 
-/** Soldes non nuls, lecture seule — SPEC.md §5.4 : jamais de trading/retrait. */
+/**
+ * Soldes non nuls, lecture seule — SPEC.md §5.4 : jamais de trading/retrait.
+ *
+ * Inclut le solde "hold" (fonds bloqués/stakés) en plus du solde
+ * "disponible" : un actif staké reste un actif possédé, même s'il n'est pas
+ * immédiatement disponible à la vente. Si Coinbase répartit une même devise
+ * sur plusieurs comptes (ex. portefeuille courant + compte de staking), les
+ * quantités sont additionnées.
+ */
 export async function obtenirSoldesCoinbase(): Promise<SoldeCoinbase[]> {
-  const soldes: SoldeCoinbase[] = [];
+  const parDevise = new Map<string, SoldeCoinbase>();
   let curseur: string | undefined;
 
   do {
@@ -62,18 +71,22 @@ export async function obtenirSoldesCoinbase(): Promise<SoldeCoinbase[]> {
     const donnees = await requeteCoinbase<ReponseComptesCoinbase>(chemin);
 
     for (const compte of donnees.accounts) {
-      const quantite = Number(compte.available_balance.value);
-      if (quantite > 0) {
-        soldes.push({
-          devise: compte.available_balance.currency,
-          quantite,
-          nomCompte: compte.name,
-        });
+      const disponible = Number(compte.available_balance.value);
+      const bloque = Number(compte.hold?.value ?? 0);
+      const quantite = disponible + bloque;
+      if (quantite <= 0) continue;
+
+      const devise = compte.available_balance.currency;
+      const existant = parDevise.get(devise);
+      if (existant) {
+        existant.quantite += quantite;
+      } else {
+        parDevise.set(devise, { devise, quantite, nomCompte: compte.name });
       }
     }
 
     curseur = donnees.has_next ? donnees.cursor : undefined;
   } while (curseur);
 
-  return soldes;
+  return [...parDevise.values()];
 }

@@ -9,8 +9,13 @@ import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { creerPosition, actualiserCours } from "./actions";
 import { ApercuCoinbase } from "./apercu-coinbase";
 
+// En dessous de 10€, 0 décimale masquerait tout (0,16€ afficherait "0 €").
 const formatEur = (n: number) =>
-  n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  n.toLocaleString("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: Math.abs(n) < 10 ? 2 : 0,
+  });
 
 export default async function PagePatrimoine() {
   const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours] =

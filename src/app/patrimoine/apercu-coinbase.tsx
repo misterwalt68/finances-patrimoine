@@ -32,13 +32,18 @@ export function ApercuCoinbase() {
       )}
 
       {etat.statut === "ok" && (
-        <p className="mt-3 text-sm text-muted">
-          {etat.nombre} position{etat.nombre > 1 ? "s" : ""} mise{etat.nombre > 1 ? "s" : ""} à
-          jour.
-          {etat.ignores.length > 0 && (
-            <> Ignoré (introuvable sur CoinGecko) : {etat.ignores.join(", ")}.</>
+        <div className="mt-3 space-y-1 text-sm text-muted">
+          <p>
+            {etat.nombre} position{etat.nombre > 1 ? "s" : ""} mise{etat.nombre > 1 ? "s" : ""} à
+            jour.
+          </p>
+          {etat.sousLeSeuil.length > 0 && (
+            <p>Ignoré (sous le seuil) : {etat.sousLeSeuil.join(", ")}.</p>
           )}
-        </p>
+          {etat.ignores.length > 0 && (
+            <p>Ignoré (introuvable sur CoinGecko) : {etat.ignores.join(", ")}.</p>
+          )}
+        </div>
       )}
 
       {etat.statut === "repos" && (
