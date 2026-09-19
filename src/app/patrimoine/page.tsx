@@ -18,6 +18,10 @@ const formatEur = (n: number) =>
     maximumFractionDigits: Math.abs(n) < 10 ? 2 : 0,
   });
 
+// Précise l'unité entre parenthèses pour les familles où "unités" seul est
+// ambigu — les métaux se pèsent en grammes.
+const uniteQuantite = (type: string | undefined) => (type === "metal" ? "unités (grammes)" : "unités");
+
 export default async function PagePatrimoine() {
   const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours] =
     await Promise.all([
@@ -172,7 +176,9 @@ export default async function PagePatrimoine() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
                           <span>{l.compte?.libelle}</span>
-                          <span>· {l.quantite} unités</span>
+                          <span>
+                            · {l.quantite} {uniteQuantite(l.actif?.type)}
+                          </span>
                           {l.position.note && <Badge>{l.position.note}</Badge>}
                           {l.position.dateAcquisition && (
                             <Badge>
