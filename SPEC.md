@@ -258,7 +258,9 @@ L'app mesure des écarts par rapport aux cibles définies par l'utilisateur lui-
 
 ## 9. Design
 
-Sobre et dense, entre Trade Republic et Finary. Fond sombre par défaut. Typographie nette, chiffres qui respirent. Très peu de couleurs : vert et rouge réservés aux variations, un seul accent ailleurs. Pas de dégradé, pas d'ombre portée, pas d'emoji dans l'interface.
+Sobre et dense, entre Trade Republic et Finary. Fond sombre par défaut. Typographie nette, chiffres qui respirent. Très peu de couleurs : le vert est la couleur d'accent principale (utilisée aussi pour les variations positives), le rouge reste réservé aux variations négatives. Pas d'emoji dans l'interface.
+
+*Mise à jour du 2026-09-19, décision de Maxime après avoir vu une maquette de référence :* une légère lueur (halo doux, dégradé discret) est autorisée sur les cartes clés d'un écran (ex. la carte de solde/coût du jour en haut de l'accueil) pour un rendu plus premium. Ça reste l'exception, pas la norme : pas de dégradé ni d'ombre sur les cartes secondaires, les listes, ou les écrans de réglages.
 
 Une touche de personnalité dans les micro-textes et les états vides, jamais dans les chiffres.
 

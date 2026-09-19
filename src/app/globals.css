@@ -2,8 +2,10 @@
 
 /*
  * Design — SPEC.md §9 : sobre et dense, entre Trade Republic et Finary.
- * Fond sombre par défaut, une seule couleur d'accent, vert/rouge réservés
- * aux variations. Pas de dégradé, pas d'ombre portée, pas d'emoji.
+ * Fond sombre par défaut. Le vert est l'accent principal (et sert aussi
+ * aux variations positives) ; le rouge reste réservé aux variations
+ * négatives. Une légère lueur est tolérée sur les cartes clés (classe
+ * `.carte-accent` ci-dessous) — l'exception, pas la norme.
  */
 :root {
   --background: #0b0c0e;
@@ -11,9 +13,9 @@
   --foreground: #f2f3f5;
   --muted: #8b8f97;
   --line: #24262b;
-  --accent: #5b8def;
+  --accent: #2dd4a0;
   --accent-foreground: #0b0c0e;
-  --positive: #35c47a;
+  --positive: #2dd4a0;
   --negative: #e5584a;
 }
 
@@ -53,4 +55,12 @@ body {
 button,
 a {
   touch-action: manipulation;
+}
+
+/* Lueur discrète réservée aux cartes clés — SPEC.md §9 (exception, pas la norme). */
+.carte-accent {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 8px 24px -12px color-mix(in srgb, var(--accent) 45%, transparent);
 }
