@@ -10,6 +10,7 @@ const sections = [
   { href: "/reglages/comptes", label: "Comptes" },
   { href: "/reglages/actifs", label: "Actifs" },
   { href: "/reglages/categories", label: "Catégories" },
+  { href: "/reglages/connexions", label: "Connexions" },
 ];
 
 export default function ReglagesLayout({ children }: LayoutProps<"/reglages">) {

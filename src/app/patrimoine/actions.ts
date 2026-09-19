@@ -58,24 +58,31 @@ export type EtatSyncCoinbase =
  * vraies positions.
  *
  * - Crée l'actif s'il n'existe pas (recherche du symbole sur CoinGecko).
+ * - Un solde staké va sur le compte "Coinbase (staking)", un solde liquide
+ *   sur le compte "Coinbase" — c'est ce badge de compte, déjà affiché sur
+ *   chaque position, qui sert d'indicateur "staké ou non", sans champ
+ *   dédié ni bidouillage d'affichage.
  * - Ignore (ne crée/ne met à jour rien) tout solde dont la valeur estimée
  *   est sous le seuil de "poussière" — des reliquats de crypto illiquides
  *   que Maxime ne considère pas comme de vraies positions.
- * - Toute position Coinbase existante qui n'est plus retrouvée dans ce
- *   passage (vendue, ou repassée sous le seuil) est supprimée : Coinbase
- *   fait foi, pas l'historique local.
+ * - Toute position Coinbase existante (sur l'un ou l'autre compte) qui n'est
+ *   plus retrouvée dans ce passage (vendue, ou repassée sous le seuil) est
+ *   supprimée : Coinbase fait foi, pas l'historique local.
  * - Le prix de revient moyen n'est pas fourni par cette API et n'est jamais
  *   deviné ; s'il existe déjà (saisi à la main), il n'est pas touché.
  */
 export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
   try {
-    const [compteCoinbase] = await db
-      .select({ id: comptes.id })
+    const comptesCoinbase = await db
+      .select({ id: comptes.id, libelle: comptes.libelle })
       .from(comptes)
       .innerJoin(institutions, eq(comptes.institutionId, institutions.id))
       .where(eq(institutions.nom, "Coinbase"));
 
-    if (!compteCoinbase) {
+    const compteLiquide = comptesCoinbase.find((c) => !/staking/i.test(c.libelle));
+    const compteStaking = comptesCoinbase.find((c) => /staking/i.test(c.libelle));
+
+    if (!compteLiquide) {
       return {
         statut: "erreur",
         message: 'Aucun compte rattaché à un établissement "Coinbase" dans les réglages.',
@@ -88,10 +95,13 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
 
     const ignores: string[] = [];
     const sousLeSeuil: string[] = [];
-    const actifIdsPresents = new Set<string>();
+    // Positions "présentes" par compte, pour le nettoyage final de chacun.
+    const presentsParCompte = new Map<string, Set<string>>();
     let nombre = 0;
 
     for (const solde of soldes) {
+      const compteCible = solde.stake && compteStaking ? compteStaking : compteLiquide;
+
       const [actifExistant] = await db
         .select()
         .from(actifs)
@@ -110,7 +120,6 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
         nomTrouve = trouve.nom;
       }
 
-      // Prix nécessaire pour juger du seuil, avant de créer quoi que ce soit.
       let prix: number | null = null;
       try {
         prix = (await adaptateurCoinGecko.obtenirPrix(identifiantSource!, "EUR")).prix;
@@ -140,12 +149,13 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
             .returning()
         )[0];
 
-      actifIdsPresents.add(actif.id);
+      if (!presentsParCompte.has(compteCible.id)) presentsParCompte.set(compteCible.id, new Set());
+      presentsParCompte.get(compteCible.id)!.add(actif.id);
 
       const [positionExistante] = await db
         .select()
         .from(positions)
-        .where(and(eq(positions.compteId, compteCoinbase.id), eq(positions.actifId, actif.id)));
+        .where(and(eq(positions.compteId, compteCible.id), eq(positions.actifId, actif.id)));
 
       if (positionExistante) {
         await db
@@ -154,7 +164,7 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
           .where(eq(positions.id, positionExistante.id));
       } else {
         await db.insert(positions).values({
-          compteId: compteCoinbase.id,
+          compteId: compteCible.id,
           actifId: actif.id,
           quantite: String(solde.quantite),
         });
@@ -172,15 +182,18 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
       nombre += 1;
     }
 
-    const positionsCoinbase = await db
-      .select({ id: positions.id, actifId: positions.actifId })
-      .from(positions)
-      .where(eq(positions.compteId, compteCoinbase.id));
-    const idsASupprimer = positionsCoinbase
-      .filter((p) => !actifIdsPresents.has(p.actifId))
-      .map((p) => p.id);
-    if (idsASupprimer.length > 0) {
-      await db.delete(positions).where(inArray(positions.id, idsASupprimer));
+    for (const compte of comptesCoinbase) {
+      const presents = presentsParCompte.get(compte.id) ?? new Set<string>();
+      const positionsDuCompte = await db
+        .select({ id: positions.id, actifId: positions.actifId })
+        .from(positions)
+        .where(eq(positions.compteId, compte.id));
+      const idsASupprimer = positionsDuCompte
+        .filter((p) => !presents.has(p.actifId))
+        .map((p) => p.id);
+      if (idsASupprimer.length > 0) {
+        await db.delete(positions).where(inArray(positions.id, idsASupprimer));
+      }
     }
 
     revalidatePath("/patrimoine");

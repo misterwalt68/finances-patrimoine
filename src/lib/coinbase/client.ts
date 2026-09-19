@@ -15,7 +15,10 @@ function identifiants() {
 
 async function requeteCoinbase<T>(chemin: string): Promise<T> {
   const { nomCle, clePriveePem } = identifiants();
-  const jwt = creerJwtCoinbase({ nomCle, clePriveePem, methode: "GET", chemin });
+  // Le JWT signe le chemin SANS les paramètres de requête (?limit=...) —
+  // Coinbase renvoie 401 si la revendication "uri" inclut la query string.
+  const cheminPourJwt = chemin.split("?")[0];
+  const jwt = creerJwtCoinbase({ nomCle, clePriveePem, methode: "GET", chemin: cheminPourJwt });
 
   const reponse = await fetch(`${URL_BASE}${chemin}`, {
     headers: { Authorization: `Bearer ${jwt}` },
@@ -31,62 +34,63 @@ async function requeteCoinbase<T>(chemin: string): Promise<T> {
 }
 
 type CompteCoinbaseBrut = {
-  uuid: string;
   name: string;
-  currency: string;
-  available_balance: { value: string; currency: string };
-  hold?: { value: string; currency: string };
-  active: boolean;
+  balance: { amount: string; currency: string };
 };
 
 type ReponseComptesCoinbase = {
-  accounts: CompteCoinbaseBrut[];
-  has_next: boolean;
-  cursor: string;
+  data: CompteCoinbaseBrut[];
+  pagination: { next_starting_after: string | null };
 };
 
 export type SoldeCoinbase = {
   devise: string;
   quantite: number;
   nomCompte: string;
+  /** Détecté sur le nom du compte Coinbase (ex. "ETH staké") — pas de champ dédié côté API. */
+  stake: boolean;
 };
 
 /**
  * Soldes non nuls, lecture seule — SPEC.md §5.4 : jamais de trading/retrait.
  *
- * Inclut le solde "hold" (fonds bloqués/stakés) en plus du solde
- * "disponible" : un actif staké reste un actif possédé, même s'il n'est pas
- * immédiatement disponible à la vente. Si Coinbase répartit une même devise
- * sur plusieurs comptes (ex. portefeuille courant + compte de staking), les
- * quantités sont additionnées.
+ * Utilise l'API v2 (`/v2/accounts`, l'API "app" historique) et non l'API v3
+ * Advanced Trade (`/api/v3/brokerage/accounts`) : cette dernière ne liste que
+ * les portefeuilles négociables et **omet les wallets de staking**. Un actif
+ * staké via l'app Coinbase apparaît comme un compte v2 à part entière (ex.
+ * "ETH staké"), détecté ici sur son nom faute de champ dédié dans l'API.
+ * Les quantités sont additionnées par devise ET par statut de staking (deux
+ * comptes "ADA" côté Coinbase, l'un liquide l'autre staké, donnent deux
+ * entrées ici — jamais fusionnées entre elles).
  */
 export async function obtenirSoldesCoinbase(): Promise<SoldeCoinbase[]> {
-  const parDevise = new Map<string, SoldeCoinbase>();
+  const parCle = new Map<string, SoldeCoinbase>();
   let curseur: string | undefined;
 
   do {
     const chemin = curseur
-      ? `/api/v3/brokerage/accounts?cursor=${encodeURIComponent(curseur)}`
-      : "/api/v3/brokerage/accounts";
+      ? `/v2/accounts?limit=100&starting_after=${encodeURIComponent(curseur)}`
+      : "/v2/accounts?limit=100";
     const donnees = await requeteCoinbase<ReponseComptesCoinbase>(chemin);
 
-    for (const compte of donnees.accounts) {
-      const disponible = Number(compte.available_balance.value);
-      const bloque = Number(compte.hold?.value ?? 0);
-      const quantite = disponible + bloque;
+    for (const compte of donnees.data) {
+      const quantite = Number(compte.balance.amount);
       if (quantite <= 0) continue;
 
-      const devise = compte.available_balance.currency;
-      const existant = parDevise.get(devise);
+      const devise = compte.balance.currency;
+      const stake = /stak/i.test(compte.name);
+      const cle = `${devise}:${stake}`;
+
+      const existant = parCle.get(cle);
       if (existant) {
         existant.quantite += quantite;
       } else {
-        parDevise.set(devise, { devise, quantite, nomCompte: compte.name });
+        parCle.set(cle, { devise, quantite, nomCompte: compte.name, stake });
       }
     }
 
-    curseur = donnees.has_next ? donnees.cursor : undefined;
+    curseur = donnees.pagination?.next_starting_after ?? undefined;
   } while (curseur);
 
-  return [...parDevise.values()];
+  return [...parCle.values()];
 }
