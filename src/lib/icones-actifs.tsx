@@ -20,8 +20,12 @@ const INFOS_CRYPTO: Record<string, { symbole: string; couleur: string }> = {
   ADA: { symbole: "₳", couleur: "#0033AD" },
 };
 
+export function couleurMetal(symbole: string): string {
+  return COULEURS_METAUX[symbole] ?? "#9a9a9a";
+}
+
 export function IconeMetal({ symbole, className }: { symbole: string; className?: string }) {
-  const couleur = COULEURS_METAUX[symbole] ?? "#9a9a9a";
+  const couleur = couleurMetal(symbole);
   return (
     <span
       aria-hidden

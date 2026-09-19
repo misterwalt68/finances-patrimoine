@@ -97,21 +97,16 @@ export type EtatHistoriqueOr =
   | { statut: "erreur"; message: string };
 
 /**
- * Charge les 30 derniers jours de cours de l'or dans `cours`, pour le
- * graphique historique — limite du palier gratuit de l'API (SPEC.md §5.2 :
- * "l'app affiche toujours la date du dernier cours connu"). Ré-exécutable
- * sans dupliquer : les points déjà enregistrés pour cette période sont
- * remplacés, pas cumulés.
+ * Charge l'historique complet (25+ ans, Yahoo Finance) de l'or dans `cours`,
+ * pour le graphique historique. Ré-exécutable sans dupliquer : les points
+ * déjà enregistrés comme historique sont remplacés, pas cumulés.
  */
 export async function chargerHistoriqueOr(): Promise<EtatHistoriqueOr> {
   try {
     const [or] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, "XAU"));
     if (!or) return { statut: "erreur", message: 'Actif "Or" introuvable.' };
 
-    const depuis = new Date();
-    depuis.setDate(depuis.getDate() - 30);
-
-    const points = await obtenirHistoriqueOr(depuis);
+    const points = await obtenirHistoriqueOr();
 
     await db
       .delete(cours)
@@ -135,8 +130,15 @@ export async function chargerHistoriqueOr(): Promise<EtatHistoriqueOr> {
   }
 }
 
-/** Rafraîchit le cours de tous les actifs ayant une source automatique. */
+/**
+ * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
+ * retire des positions) puis rafraîchit le cours de tous les actifs ayant
+ * une source automatique. Fusionné à la demande de Maxime — avoir un
+ * encart Coinbase séparé n'apportait rien de plus qu'un bouton "tout
+ * actualiser" unique.
+ */
 export async function actualiserCours() {
+  await synchroniserCoinbase().catch(() => null);
   const liste = await db.select().from(actifs);
   await Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id)));
   revalidatePath("/patrimoine");

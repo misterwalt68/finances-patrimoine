@@ -36,38 +36,53 @@ export const metaux: AdaptateurPrix = {
 export type PointHistorique = { date: Date; prix: number };
 
 /**
- * Historique quotidien de l'or, converti en €/gramme.
+ * Historique quotidien de l'or (25+ ans), converti en €/gramme.
  *
- * Limite du palier gratuit de goldprice.dev, vérifiée en direct : seulement
- * les 30 derniers jours, et uniquement en dollars (l'historique en euros
- * n'est pas disponible gratuitement). On convertit donc chaque valeur via
- * le taux EUR/USD *du jour* (rapport entre les deux cours au comptant
- * actuels) — une approximation raisonnable pour un usage personnel, pas un
- * vrai taux historique jour par jour.
+ * goldprice.dev (utilisé pour le cours du jour ci-dessus) limite son
+ * historique gratuit à 30 jours — vérifié en direct. Pour un vrai historique
+ * long terme, on utilise l'endpoint "chart" de Yahoo Finance sur le contrat
+ * à terme sur l'or (GC=F, COMEX) : gratuit, sans clé, aucune limite de
+ * période rencontrée en pratique (testé jusqu'à "max", ~2000 à aujourd'hui).
+ * C'est un endpoint non documenté officiellement par Yahoo — largement
+ * utilisé par l'écosystème finance open source depuis des années, mais sans
+ * garantie contractuelle de leur part ; à surveiller s'il venait à changer.
+ *
+ * Coté en dollars par once troy (comme tout contrat COMEX) : converti en
+ * euros via le taux EUR/USD *du jour* (rapport entre les deux cours au
+ * comptant actuels de l'or), pas un vrai taux de change historique jour par
+ * jour — une approximation raisonnable pour un usage personnel.
  */
-export async function obtenirHistoriqueOr(depuis: Date): Promise<PointHistorique[]> {
+export async function obtenirHistoriqueOr(): Promise<PointHistorique[]> {
   const [prixEur, prixUsd] = await Promise.all([
     metaux.obtenirPrix("XAU", "EUR"),
     metaux.obtenirPrix("XAU", "USD"),
   ]);
   const tauxEurParUsd = prixEur.prix / prixUsd.prix;
 
-  const depuisStr = depuis.toISOString().slice(0, 10);
-  const aujourdHui = new Date().toISOString().slice(0, 10);
-  const url = `https://api.goldprice.dev/v1/bars?symbol=XAU-USD-SPOT&interval=1d&from=${depuisStr}&to=${aujourdHui}&limit=60`;
-  const reponse = await fetch(url, { cache: "no-store" });
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=max&interval=1d";
+  const reponse = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+    cache: "no-store",
+  });
 
   if (!reponse.ok) {
-    throw new Error(`goldprice.dev (historique) a répondu ${reponse.status}`);
+    throw new Error(`Yahoo Finance a répondu ${reponse.status}`);
   }
 
   const donnees = await reponse.json();
-  const barres: { bar_start: string; close: string }[] = donnees?.bars ?? [];
+  const resultat = donnees?.chart?.result?.[0];
+  const timestamps: number[] = resultat?.timestamp ?? [];
+  const closes: (number | null)[] = resultat?.indicators?.quote?.[0]?.close ?? [];
 
-  return barres
-    .map((b) => ({
-      date: new Date(b.bar_start),
-      prix: (Number(b.close) * tauxEurParUsd) / GRAMMES_PAR_ONCE_TROY,
-    }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const points: PointHistorique[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const closeUsd = closes[i];
+    if (closeUsd == null) continue; // jour sans cotation (marché fermé)
+    points.push({
+      date: new Date(timestamps[i] * 1000),
+      prix: (closeUsd * tauxEurParUsd) / GRAMMES_PAR_ONCE_TROY,
+    });
+  }
+
+  return points.sort((a, b) => a.date.getTime() - b.date.getTime());
 }

@@ -6,7 +6,6 @@ import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { TYPES_ACTIF } from "@/lib/constants";
 import { actualiserCours } from "./actions";
-import { ApercuCoinbase } from "./apercu-coinbase";
 import { FormulairePosition } from "./formulaire-position";
 import { CamembertAllocation } from "./camembert";
 import { SupprimerPositionBouton } from "./supprimer-position";
@@ -81,12 +80,25 @@ export default async function PagePatrimoine() {
   // présents dans les réglages, pas seulement ceux déjà en position — pour
   // pouvoir consulter le cours d'un métal avant même d'en posséder.
   const metauxActifs = listeActifs.filter((a) => a.type === "metal");
-  const metauxGraphique = metauxActifs.map((a) => ({
-    actifId: a.id,
-    libelle: a.libelle,
-    symbole: a.identifiantExterne ?? "",
-    automatique: METAUX_PHYSIQUES.find((m) => m.symbole === a.identifiantExterne)?.sourcePrix === "metaux",
-  }));
+  const valeurPossedeeParActif = new Map<string, number>();
+  for (const l of lignes) {
+    if (l.actif?.type !== "metal") continue;
+    valeurPossedeeParActif.set(
+      l.actif.id,
+      (valeurPossedeeParActif.get(l.actif.id) ?? 0) + (l.calcul?.valeurActuelle ?? 0),
+    );
+  }
+  // Filtres triés par montant possédé, du plus grand au plus petit — les
+  // métaux pas encore possédés restent consultables, mais après les autres.
+  const metauxGraphique = metauxActifs
+    .map((a) => ({
+      actifId: a.id,
+      libelle: a.libelle,
+      symbole: a.identifiantExterne ?? "",
+      automatique: METAUX_PHYSIQUES.find((m) => m.symbole === a.identifiantExterne)?.sourcePrix === "metaux",
+      valeurPossedee: valeurPossedeeParActif.get(a.id) ?? 0,
+    }))
+    .sort((a, b) => b.valeurPossedee - a.valeurPossedee);
   const coursParActifMetal: Record<string, { date: string; prix: number }[]> = {};
   for (const c of listeCours) {
     if (!metauxActifs.some((a) => a.id === c.actifId)) continue;
@@ -113,10 +125,21 @@ export default async function PagePatrimoine() {
     lignes: lignes.filter((l) => l.actif?.type === t.value),
   }))
     .filter((g) => g.lignes.length > 0)
-    .map((g) => ({
-      ...g,
-      valeur: g.lignes.reduce((s, l) => s + (l.calcul?.valeurActuelle ?? 0), 0),
-    }));
+    .map((g) => {
+      const valeur = g.lignes.reduce((s, l) => s + (l.calcul?.valeurActuelle ?? 0), 0);
+      const apports = g.lignes.reduce(
+        (s, l) => s + (l.calcul?.apports ?? l.quantite * l.prixRevientMoyen),
+        0,
+      );
+      const performance = valeur - apports;
+      return {
+        ...g,
+        valeur,
+        apports,
+        performance,
+        performancePct: apports !== 0 ? (performance / apports) * 100 : null,
+      };
+    });
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
@@ -164,8 +187,6 @@ export default async function PagePatrimoine() {
       )}
 
       <div className="mt-6 space-y-6">
-        <ApercuCoinbase />
-
         {donneesInsuffisantes ? (
           <ListeVide>
             Crée d&apos;abord un compte et un actif dans les{" "}
@@ -196,11 +217,23 @@ export default async function PagePatrimoine() {
                         {groupe.lignes.length}
                       </span>
                     </span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-medium text-foreground">
-                        {formatEurArrondi(groupe.valeur)}
+                    <span className="flex flex-col items-end gap-1">
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">
+                          {formatEurArrondi(groupe.valeur)}
+                        </span>
+                        <span className="text-muted transition-transform group-open:rotate-180">▾</span>
                       </span>
-                      <span className="text-muted transition-transform group-open:rotate-180">▾</span>
+                      <span
+                        className={`text-xs ${groupe.performance >= 0 ? "text-positive" : "text-negative"}`}
+                      >
+                        {groupe.performance >= 0 ? "▲" : "▼"}
+                        {groupe.performancePct !== null && (
+                          <> {Math.abs(groupe.performancePct).toFixed(1)}% ·</>
+                        )}{" "}
+                        {groupe.performance >= 0 ? "+" : ""}
+                        {formatEurPrecis(groupe.performance)}
+                      </span>
                     </span>
                   </summary>
                   {groupe.type === "metal" && metauxGraphique.length > 0 && (
