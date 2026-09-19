@@ -3,7 +3,7 @@ import { TYPES_ACTIF } from "@/lib/constants";
 // Palette catégorielle (mode sombre) — ordre fixe par type d'actif, jamais
 // réassigné selon ce qui est affiché. Cf. compétence dataviz : "color
 // follows the entity, never its rank".
-const COULEURS_PAR_TYPE: Record<string, string> = {
+export const COULEURS_PAR_TYPE: Record<string, string> = {
   action: "#3987e5",
   etf: "#d95926",
   crypto: "#199e70",

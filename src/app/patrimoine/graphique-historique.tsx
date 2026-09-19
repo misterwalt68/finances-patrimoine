@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { IconeMetal, IconeBanque, couleurMetal, COULEUR_BANQUE } from "@/lib/icones-actifs";
+import { COULEURS_PAR_TYPE } from "./camembert";
 
 export type PointCours = { date: string; prix: number };
 export type MetalGraphique = { actifId: string; libelle: string; symbole: string };
@@ -494,6 +495,24 @@ export function GraphiqueHistoriqueComptes({
     libelle: c.libelle,
     couleur: COULEUR_BANQUE,
     icone: <IconeBanque identifiantExterne={c.identifiantExterne} className="h-4 w-4" />,
+  }));
+
+  return <GraphiqueHistorique series={series} coursParSerie={coursParActif} />;
+}
+
+/** Façade fonds/unités de compte (ex. Assurance-vie) — même principe que les comptes, sans marqueur. */
+export function GraphiqueHistoriqueFonds({
+  fonds,
+  coursParActif,
+}: {
+  fonds: CompteGraphique[];
+  coursParActif: Record<string, PointCours[]>;
+}) {
+  const series = fonds.map((f) => ({
+    id: f.actifId,
+    libelle: f.libelle,
+    couleur: COULEURS_PAR_TYPE.fonds,
+    icone: <IconeBanque identifiantExterne={f.identifiantExterne} className="h-4 w-4" />,
   }));
 
   return <GraphiqueHistorique series={series} coursParSerie={coursParActif} />;

@@ -10,7 +10,7 @@ import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
 import { ModifierPositionBouton } from "./modifier-position";
 import { IconeActif } from "@/lib/icones-actifs";
-import { GraphiqueHistoriqueMetal, GraphiqueHistoriqueComptes } from "./graphique-historique";
+import { GraphiqueHistoriqueMetal, GraphiqueHistoriqueComptes, GraphiqueHistoriqueFonds } from "./graphique-historique";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -137,6 +137,25 @@ export default async function PagePatrimoine() {
   for (const c of listeCours) {
     if (!comptesGraphique.some((cg) => cg.actifId === c.actifId)) continue;
     (coursParActifCash[c.actifId] ??= []).push({
+      date: c.horodatage.toISOString(),
+      prix: Number(c.prix),
+    });
+  }
+
+  // Même principe pour les fonds/unités de compte (ex. Assurance-vie) —
+  // simple suivi de valeur dans le temps, historique déjà accumulé dans
+  // `cours` à chaque correction manuelle.
+  const fondsGraphique = lignes
+    .filter((l) => l.actif?.type === "fonds")
+    .map((l) => ({
+      actifId: l.actif!.id,
+      libelle: `${l.actif!.libelle}${l.compte?.libelle ? ` (${l.compte.libelle})` : ""}`,
+      identifiantExterne: l.actif!.identifiantExterne ?? null,
+    }));
+  const coursParActifFonds: Record<string, { date: string; prix: number }[]> = {};
+  for (const c of listeCours) {
+    if (!fondsGraphique.some((fg) => fg.actifId === c.actifId)) continue;
+    (coursParActifFonds[c.actifId] ??= []).push({
       date: c.horodatage.toISOString(),
       prix: Number(c.prix),
     });
@@ -315,6 +334,9 @@ export default async function PagePatrimoine() {
                   )}
                   {groupe.type === "cash" && comptesGraphique.length > 0 && (
                     <GraphiqueHistoriqueComptes comptes={comptesGraphique} coursParActif={coursParActifCash} />
+                  )}
+                  {groupe.type === "fonds" && fondsGraphique.length > 0 && (
+                    <GraphiqueHistoriqueFonds fonds={fondsGraphique} coursParActif={coursParActifFonds} />
                   )}
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => (
