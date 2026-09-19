@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/confidentialite", "/conditions"];
 
 /**
  * Garde d'accès globale — SPEC.md §3 : "un seul compte". Au-delà de la session
