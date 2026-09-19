@@ -35,6 +35,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// App authentifiée, données à jour à chaque requête : jamais de page figée
+// au build. S'applique à toutes les routes (héritage de layout Next.js).
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
