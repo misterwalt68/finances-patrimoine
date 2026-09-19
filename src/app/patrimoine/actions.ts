@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { actifs, comptes, cours, institutions, parametres, positions } from "@/db/schema";
 import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
@@ -116,11 +116,14 @@ async function synchroniserSourcesMetaux(): Promise<void> {
 }
 
 /**
- * Recharge l'historique complet (25 ans, Yahoo Finance) de chaque métal à
- * source automatique dans `cours`, pour le graphique historique — appelé à
- * chaque "Actualiser les cours", plus besoin d'un bouton dédié maintenant que
- * l'historique se charge en entier d'un coup. Ré-exécutable sans dupliquer :
- * les points déjà enregistrés comme historique sont remplacés, pas cumulés.
+ * Recharge l'historique (Yahoo Finance) de chaque métal à source automatique
+ * dans `cours`, pour le graphique historique — appelé à chaque "Actualiser
+ * les cours", plus besoin d'un bouton dédié.
+ *
+ * Incrémental : ne va chercher que les jours postérieurs au dernier point
+ * déjà en base (25 ans complets uniquement au tout premier chargement) —
+ * demandé par Maxime pour éviter de retélécharger et réinsérer ~6300 lignes
+ * par métal à chaque clic alors que seuls les derniers jours changent.
  */
 async function chargerHistoriqueMetaux(): Promise<void> {
   const metauxAutomatiques = METAUX_PHYSIQUES.filter((m) => m.sourcePrix === "metaux");
@@ -130,22 +133,24 @@ async function chargerHistoriqueMetaux(): Promise<void> {
       const [actif] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, metal.symbole));
       if (!actif) return;
 
-      const points = await obtenirHistoriqueMetal(metal.symbole);
+      const [dernier] = await db
+        .select({ horodatage: cours.horodatage })
+        .from(cours)
+        .where(and(eq(cours.actifId, actif.id), eq(cours.source, "metaux_historique")))
+        .orderBy(desc(cours.horodatage))
+        .limit(1);
 
-      await db
-        .delete(cours)
-        .where(and(eq(cours.actifId, actif.id), eq(cours.source, "metaux_historique")));
+      const points = await obtenirHistoriqueMetal(metal.symbole, dernier?.horodatage);
+      if (points.length === 0) return;
 
-      if (points.length > 0) {
-        await db.insert(cours).values(
-          points.map((p) => ({
-            actifId: actif.id,
-            horodatage: p.date,
-            prix: String(p.prix),
-            source: "metaux_historique",
-          })),
-        );
-      }
+      await db.insert(cours).values(
+        points.map((p) => ({
+          actifId: actif.id,
+          horodatage: p.date,
+          prix: String(p.prix),
+          source: "metaux_historique",
+        })),
+      );
     }),
   );
 }

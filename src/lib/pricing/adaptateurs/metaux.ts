@@ -95,7 +95,36 @@ export const metaux: AdaptateurPrix = {
 export type PointHistorique = { date: Date; prix: number };
 
 /**
- * Historique quotidien (25 ans) d'un métal physique, converti en €/gramme.
+ * Plages Yahoo Finance disponibles, de la plus courte à la plus longue —
+ * sert à ne demander que ce qu'il faut pour couvrir les jours manquants
+ * depuis le dernier point déjà en base, plutôt que retélécharger 25 ans à
+ * chaque appel. Toutes vérifiées en direct par `curl` (nombre de points
+ * cohérent avec une résolution quotidienne réelle).
+ */
+const PLAGES_YAHOO: { jours: number; range: string }[] = [
+  { jours: 5, range: "5d" },
+  { jours: 30, range: "1mo" },
+  { jours: 90, range: "3mo" },
+  { jours: 180, range: "6mo" },
+  { jours: 365, range: "1y" },
+  { jours: 365 * 2, range: "2y" },
+  { jours: 365 * 5, range: "5y" },
+  { jours: 365 * 10, range: "10y" },
+];
+
+function choisirPlageYahoo(depuis: Date | undefined): string {
+  if (!depuis) return "25y"; // jamais chargé : il faut tout l'historique.
+  const joursEcoules = (Date.now() - depuis.getTime()) / (1000 * 60 * 60 * 24);
+  const plage = PLAGES_YAHOO.find((p) => joursEcoules <= p.jours);
+  return plage?.range ?? "25y";
+}
+
+/**
+ * Historique quotidien d'un métal physique, converti en €/gramme — complet
+ * (25 ans) si `depuis` est omis, sinon uniquement les points postérieurs à
+ * cette date (rechargement incrémental : demandé par Maxime pour éviter de
+ * retélécharger 25 ans de cotations à chaque clic sur "Actualiser les
+ * cours").
  *
  * Piège vérifié en direct (curl) : `range=max` renvoie silencieusement un
  * point par MOIS au lieu d'un point par jour (Yahoo dégrade la résolution
@@ -103,13 +132,13 @@ export type PointHistorique = { date: Date; prix: number };
  * jour de bourse sur toute la période (~6300 points vérifiés pour chacun
  * des 5 métaux), largement suffisant pour cet usage personnel.
  */
-export async function obtenirHistoriqueMetal(symbole: string): Promise<PointHistorique[]> {
+export async function obtenirHistoriqueMetal(symbole: string, depuis?: Date): Promise<PointHistorique[]> {
   const config = CONFIG_YAHOO[symbole];
   if (!config) return [];
 
   const [taux, resultat] = await Promise.all([
     tauxEurParUsd(),
-    recupererGraphiqueYahoo(config.ticker, "25y"),
+    recupererGraphiqueYahoo(config.ticker, choisirPlageYahoo(depuis)),
   ]);
 
   const timestamps: number[] = resultat?.timestamp ?? [];
@@ -119,10 +148,9 @@ export async function obtenirHistoriqueMetal(symbole: string): Promise<PointHist
   for (let i = 0; i < timestamps.length; i++) {
     const closeUsd = closes[i];
     if (closeUsd == null) continue; // jour sans cotation (marché fermé)
-    points.push({
-      date: new Date(timestamps[i] * 1000),
-      prix: (closeUsd * taux) / config.grammesParUnite,
-    });
+    const date = new Date(timestamps[i] * 1000);
+    if (depuis && date.getTime() <= depuis.getTime()) continue; // déjà en base
+    points.push({ date, prix: (closeUsd * taux) / config.grammesParUnite });
   }
 
   return points.sort((a, b) => a.date.getTime() - b.date.getTime());
