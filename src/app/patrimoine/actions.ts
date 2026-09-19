@@ -95,6 +95,14 @@ export async function creerPosition(formData: FormData) {
  * revient sont absents du formulaire pour un actif "cash" (gérés
  * automatiquement, cf. rafraichirCoursActif) — `FormData.has` distingue
  * "champ absent, ne pas toucher" de "champ vidé, remettre à null".
+ *
+ * `valeurActuelle` (présent seulement pour un actif à cours "manuel", ex.
+ * Livret A ou une future Assurance-vie) devient un nouveau point
+ * d'historique dans `cours` — c'est la "valeur actuelle" (avec intérêts,
+ * plus-values…), distincte du prix de revient (ce qui a été versé). Pour un
+ * cash manuel, les deux sont la même chose par construction (pas de notion
+ * d'investissement) : on garde alors `prixRevientMoyen` aligné dessus,
+ * exactement comme le fait `rafraichirCoursActif` pour un cash automatique.
  */
 export async function modifierPosition(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
@@ -102,6 +110,10 @@ export async function modifierPosition(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
   if (!id || !compteId) return;
+
+  const [positionExistante] = await db.select().from(positions).where(eq(positions.id, id));
+  if (!positionExistante) return;
+  const [actif] = await db.select().from(actifs).where(eq(actifs.id, positionExistante.actifId));
 
   const valeurs: Partial<typeof positions.$inferInsert> = {
     compteId,
@@ -114,6 +126,19 @@ export async function modifierPosition(formData: FormData) {
   }
   if (formData.has("prixRevientMoyen")) {
     valeurs.prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim() || null;
+  }
+
+  const valeurActuelle = String(formData.get("valeurActuelle") ?? "").trim();
+  if (valeurActuelle && actif) {
+    await db.insert(cours).values({
+      actifId: actif.id,
+      horodatage: new Date(),
+      prix: valeurActuelle,
+      source: "manuel",
+    });
+    if (actif.type === "cash") {
+      valeurs.prixRevientMoyen = valeurActuelle;
+    }
   }
 
   await db.update(positions).set(valeurs).where(eq(positions.id, id));

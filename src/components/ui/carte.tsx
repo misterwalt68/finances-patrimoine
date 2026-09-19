@@ -3,14 +3,16 @@ import type { ReactNode } from "react";
 export function Carte({
   children,
   accent = false,
+  className = "",
 }: {
   children: ReactNode;
   /** Lueur discrète — réservée à la carte clé d'un écran (SPEC.md §9). */
   accent?: boolean;
+  className?: string;
 }) {
   return (
     <section
-      className={`rounded-2xl border border-line bg-surface p-4 ${accent ? "carte-accent" : ""}`}
+      className={`rounded-2xl border border-line bg-surface p-4 ${accent ? "carte-accent" : ""} ${className}`}
     >
       {children}
     </section>

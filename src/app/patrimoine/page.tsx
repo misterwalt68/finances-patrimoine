@@ -166,6 +166,26 @@ export default async function PagePatrimoine() {
       };
     });
 
+  // Rappel mensuel : tout actif dont le cours n'est pas suivi automatiquement
+  // (Livret A, une future Assurance-vie…) peut dériver silencieusement de la
+  // réalité sans qu'on y touche — jamais mis à jour, ou mis à jour il y a
+  // plus de 30 jours, deux cas où ça vaut le coup d'aller vérifier.
+  // Composant serveur (pas de "use client") : recalculé une fois par
+  // requête, jamais par un re-render client — l'impureté que la règle
+  // react-hooks/purity redoute (pensée pour le rendu client) n'a pas prise ici.
+  // eslint-disable-next-line react-hooks/purity
+  const maintenantMs = Date.now();
+  const actifsAVerifier = lignes
+    .filter((l) => l.actif?.sourcePrix === "manuel")
+    .map((l) => ({
+      id: l.position.id,
+      libelle: `${l.actif!.libelle}${l.compte?.libelle ? ` (${l.compte.libelle})` : ""}`,
+      joursDepuis: l.dernierCours
+        ? Math.floor((maintenantMs - l.dernierCours.horodatage.getTime()) / (24 * 60 * 60 * 1000))
+        : null,
+    }))
+    .filter((a) => a.joursDepuis === null || a.joursDepuis >= 30);
+
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
       <header className="flex items-center justify-between py-6">
@@ -195,6 +215,28 @@ export default async function PagePatrimoine() {
           )}
         </div>
       </header>
+
+      {actifsAVerifier.length > 0 && (
+        <Carte className="mb-4">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-warning">
+            <span aria-hidden>⚠</span> À vérifier ce mois-ci
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Ces montants ne sont pas suivis en direct — pense à les recaler sur leur vraie valeur.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {actifsAVerifier.map((a) => (
+              <li key={a.id} className="text-sm text-foreground">
+                {a.libelle}
+                <span className="text-muted">
+                  {" — "}
+                  {a.joursDepuis === null ? "jamais mis à jour" : `il y a ${a.joursDepuis} jours`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Carte>
+      )}
 
       <Carte accent>
         <p className="text-sm text-muted">Valeur totale</p>
@@ -327,6 +369,7 @@ export default async function PagePatrimoine() {
                             position={l.position}
                             actifLibelle={l.actif?.libelle ?? "cette position"}
                             actifType={l.actif?.type}
+                            sourcePrix={l.actif?.sourcePrix}
                             listeComptes={listeComptes}
                             listeInstitutions={listeInstitutions}
                           />

@@ -17,6 +17,9 @@
   --accent-foreground: #0b0c0e;
   --positive: #2dd4a0;
   --negative: #e5584a;
+  /* Rappel, pas une erreur — jamais confondu avec --negative (Ex: solde à
+     vérifier manuellement). Teinte distincte, réservée à cet usage. */
+  --warning: #e0a83e;
 }
 
 @theme inline {
@@ -29,6 +32,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
+  --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

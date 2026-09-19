@@ -28,12 +28,14 @@ export function ModifierPositionBouton({
   position,
   actifLibelle,
   actifType,
+  sourcePrix,
   listeComptes,
   listeInstitutions,
 }: {
   position: Position;
   actifLibelle: string;
   actifType?: string;
+  sourcePrix?: string;
   listeComptes: Compte[];
   listeInstitutions: Institution[];
 }) {
@@ -42,10 +44,14 @@ export function ModifierPositionBouton({
   const [saisieSuppression, setSaisieSuppression] = useState("");
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
 
-  // Le solde d'un compte bancaire (cash) est géré automatiquement par
-  // l'actualisation des cours (SPEC §4) — quantité et prix de revient n'ont
-  // rien à faire dans un formulaire de saisie manuelle pour ce type.
   const estCash = actifType === "cash";
+  // Un compte cash relié en DSP2 (BoursoBank, Trade Republic) a son solde
+  // géré automatiquement à chaque actualisation — rien à saisir ici. Un
+  // compte cash "manuel" (ex. Livret A, hors DSP2) a besoin d'une saisie de
+  // solde ; comme pour tout actif à cours manuel (ex. future Assurance-vie),
+  // ce nouveau solde/valeur devient un nouveau point d'historique (`cours`),
+  // pas seulement une correction du prix de revient.
+  const estValeurManuelle = sourcePrix === "manuel";
 
   const institutionsParId = useMemo(
     () => new Map(listeInstitutions.map((i) => [i.id, i])),
@@ -135,6 +141,18 @@ export function ModifierPositionBouton({
                         defaultValue={position.prixRevientMoyen ?? ""}
                       />
                     </>
+                  )}
+                  {estValeurManuelle && (
+                    <Champ
+                      label={estCash ? "Solde actuel (€)" : "Valeur actuelle totale (€, optionnel)"}
+                      name="valeurActuelle"
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      placeholder={estCash ? undefined : "Laisser vide si rien de nouveau à signaler"}
+                      defaultValue={estCash ? (position.prixRevientMoyen ?? "") : ""}
+                      required={estCash}
+                    />
                   )}
                   <Champ
                     label="Description (optionnel)"
