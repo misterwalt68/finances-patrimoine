@@ -105,6 +105,11 @@ export function IconeActif({
 }): ReactNode {
   if (type === "metal" && identifiantExterne) return <IconeMetal symbole={identifiantExterne} />;
   if (type === "crypto" && identifiantExterne) return <IconeCrypto code={identifiantExterne} />;
+  // Un produit d'une banque connue (ex. Assurance-vie BoursoBank, type
+  // "fonds") affiche aussi son logo, pas seulement les comptes "cash".
+  if (identifiantExterne && identifiantExterne in LOGOS_BANQUE) {
+    return <IconeBanque identifiantExterne={identifiantExterne} />;
+  }
   if (type === "cash") return <IconeBanque identifiantExterne={identifiantExterne} />;
   return null;
 }
