@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { actifs, cours } from "@/db/schema";
+import { actifs, cours, positions } from "@/db/schema";
 import { obtenirAdaptateur } from "./registre";
 
 /**
@@ -30,6 +30,18 @@ export async function rafraichirCoursActif(actifId: string): Promise<number | nu
     prix: String(prix),
     source: actif.sourcePrix,
   });
+
+  // Un compte bancaire (DSP2) n'est pas un investissement : son solde n'a
+  // pas de "prix de revient" au sens où l'entend le reste de l'app (SPEC
+  // §4, apports vs performance). On aligne le prix de revient sur le
+  // dernier solde connu pour que la position affiche sa vraie valeur sans
+  // jamais faire apparaître un "gain" ou une "perte" qui n'a pas de sens ici.
+  if (actif.type === "cash") {
+    await db
+      .update(positions)
+      .set({ prixRevientMoyen: String(prix) })
+      .where(eq(positions.actifId, actif.id));
+  }
 
   return prix;
 }

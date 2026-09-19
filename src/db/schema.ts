@@ -200,6 +200,10 @@ export const transactions = pgTable("transactions", {
   recurrent: boolean("recurrent").notNull().default(false),
   source: text("source").notNull(), // psd2 | raccourci_dictee | raccourci_photo | raccourci_manuel | manuel
   statut: text("statut").notNull().default("a_categoriser"), // a_categoriser | categorise
+  // Référence renvoyée par la source externe (ex. entry_reference Enable
+  // Banking) — sert uniquement à ne pas réimporter deux fois la même
+  // transaction bancaire à chaque synchronisation, jamais affiché.
+  identifiantExterne: text("identifiant_externe"),
   createdAt: createdAt(),
 });
 

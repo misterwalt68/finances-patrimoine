@@ -1,15 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { actifs, comptes, cours, institutions, parametres, positions } from "@/db/schema";
+import { actifs, comptes, cours, institutions, parametres, positions, transactions } from "@/db/schema";
 import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
 import { rechercherSurCoinGecko } from "@/lib/pricing/adaptateurs/coingecko";
 import { obtenirAdaptateur } from "@/lib/pricing/registre";
 import { obtenirHistoriqueMetal } from "@/lib/pricing/adaptateurs/metaux";
 import { obtenirSoldesCoinbase, obtenirTransactionsCoinbase } from "@/lib/coinbase/client";
 import { calculerCoutBaseMoyen } from "@/lib/coinbase/cout-base";
+import { obtenirTransactionsBancaires, EB_SANDBOX } from "@/lib/enable-banking/client";
 import { METAUX_PHYSIQUES } from "@/lib/constants";
 
 /**
@@ -156,18 +157,93 @@ async function chargerHistoriqueMetaux(): Promise<void> {
 }
 
 /**
+ * Synchronise les transactions bancaires (DSP2, SPEC.md §5.1/§10) de chaque
+ * compte rattaché à une connexion Enable Banking (`comptes.enableBankingAccountId`
+ * non nul). Incrémental : ne récupère que ce qui est postérieur à la
+ * dernière transaction déjà connue pour ce compte, 30 jours en arrière au
+ * tout premier import — jamais tout l'historique bancaire d'un coup, à la
+ * demande explicite de Maxime ("pas trop flood").
+ *
+ * `entry_reference` sert de clé de déduplication entre deux synchros :
+ * `transaction_id` est vérifié en direct comme toujours vide chez
+ * BoursoBank, contrairement à `entry_reference`.
+ */
+async function synchroniserTransactionsBancaires(): Promise<void> {
+  const comptesLies = await db
+    .select({ id: comptes.id, uid: comptes.enableBankingAccountId })
+    .from(comptes)
+    .where(isNotNull(comptes.enableBankingAccountId));
+
+  await Promise.allSettled(
+    comptesLies.map(async (compte) => {
+      const uid = compte.uid!;
+
+      const [derniere] = await db
+        .select({ date: transactions.date })
+        .from(transactions)
+        .where(and(eq(transactions.compteId, compte.id), eq(transactions.source, "psd2")))
+        .orderBy(desc(transactions.date))
+        .limit(1);
+      const dateDepuis =
+        derniere?.date ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      const existantes = new Set(
+        (
+          await db
+            .select({ ref: transactions.identifiantExterne })
+            .from(transactions)
+            .where(eq(transactions.compteId, compte.id))
+        )
+          .map((t) => t.ref)
+          .filter((ref): ref is string => ref !== null),
+      );
+
+      let curseur: string | undefined;
+      do {
+        const { transactions: lot, continuationKey } = await obtenirTransactionsBancaires(uid, EB_SANDBOX, {
+          dateDepuis,
+          continuationKey: curseur,
+        });
+
+        const nouvelles = lot.filter(
+          (t) => t.date && t.identifiantExterne && !existantes.has(t.identifiantExterne),
+        );
+        if (nouvelles.length > 0) {
+          await db.insert(transactions).values(
+            nouvelles.map((t) => ({
+              compteId: compte.id,
+              montant: String(t.montant),
+              date: t.date!,
+              commercant: t.libelle,
+              source: "psd2",
+              statut: "a_categoriser" as const,
+              identifiantExterne: t.identifiantExterne,
+            })),
+          );
+          for (const t of nouvelles) existantes.add(t.identifiantExterne!);
+        }
+
+        curseur = continuationKey ?? undefined;
+      } while (curseur);
+    }),
+  );
+}
+
+/**
  * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
  * retire des positions), rafraîchit le cours de tous les actifs ayant une
- * source automatique, et ré-enregistre l'historique complet des métaux.
- * Fusionné à la demande de Maxime — avoir un encart Coinbase séparé ou un
- * bouton "Charger l'historique" séparé n'apportait rien de plus qu'un bouton
- * "tout actualiser" unique.
+ * source automatique (dont les comptes bancaires DSP2), importe les
+ * dernières transactions bancaires, et ré-enregistre l'historique complet
+ * des métaux. Fusionné à la demande de Maxime — avoir un encart séparé pour
+ * chaque connexion n'apportait rien de plus qu'un bouton "tout actualiser"
+ * unique.
  */
 export async function actualiserCours() {
   await synchroniserSourcesMetaux();
   await synchroniserCoinbase().catch(() => null);
   const liste = await db.select().from(actifs);
   await Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id)));
+  await synchroniserTransactionsBancaires().catch(() => null);
   await chargerHistoriqueMetaux().catch(() => null);
   revalidatePath("/patrimoine");
 }

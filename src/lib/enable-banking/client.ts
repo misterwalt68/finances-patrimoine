@@ -144,8 +144,15 @@ export async function obtenirSoldesBancaires(compteUid: string, sandbox: boolean
 }
 
 export type TransactionBancaire = {
-  id: string | null;
+  /**
+   * Identifiant stable pour éviter les doublons entre deux synchros —
+   * `transaction_id` est vérifié en direct comme toujours `null` chez
+   * BoursoBank, `entry_reference` (la référence interne banque) est en
+   * revanche toujours présent et stable, donc utilisé à la place.
+   */
+  identifiantExterne: string | null;
   date: string | null;
+  /** Signé : négatif pour un débit, positif pour un crédit. */
   montant: number;
   devise: string;
   libelle: string | null;
@@ -154,14 +161,16 @@ export type TransactionBancaire = {
 export async function obtenirTransactionsBancaires(
   compteUid: string,
   sandbox: boolean,
-  continuationKey?: string,
+  options?: { dateDepuis?: string; continuationKey?: string },
 ): Promise<{ transactions: TransactionBancaire[]; continuationKey: string | null }> {
   type ReponseBrute = {
     transactions: {
-      transaction_id?: string;
+      entry_reference?: string;
       booking_date?: string;
       transaction_date?: string;
+      value_date?: string;
       transaction_amount: { amount: string; currency: string };
+      credit_debit_indicator?: "CRDT" | "DBIT";
       remittance_information?: string[];
       creditor?: { name?: string };
       debtor?: { name?: string };
@@ -169,20 +178,26 @@ export async function obtenirTransactionsBancaires(
     continuation_key?: string;
   };
 
-  const chemin = continuationKey
-    ? `/accounts/${compteUid}/transactions?continuation_key=${encodeURIComponent(continuationKey)}`
-    : `/accounts/${compteUid}/transactions`;
+  const parametres = new URLSearchParams();
+  if (options?.continuationKey) parametres.set("continuation_key", options.continuationKey);
+  if (options?.dateDepuis) parametres.set("date_from", options.dateDepuis);
+  const suffixe = parametres.toString();
+  const chemin = `/accounts/${compteUid}/transactions${suffixe ? `?${suffixe}` : ""}`;
 
   const brut = await requeteEnableBanking<ReponseBrute>(chemin, { sandbox });
 
   return {
-    transactions: brut.transactions.map((t) => ({
-      id: t.transaction_id ?? null,
-      date: t.booking_date ?? t.transaction_date ?? null,
-      montant: Number(t.transaction_amount.amount),
-      devise: t.transaction_amount.currency,
-      libelle: t.remittance_information?.join(" ") ?? t.creditor?.name ?? t.debtor?.name ?? null,
-    })),
+    transactions: brut.transactions.map((t) => {
+      const montantAbsolu = Number(t.transaction_amount.amount);
+      const signe = t.credit_debit_indicator === "DBIT" ? -1 : 1;
+      return {
+        identifiantExterne: t.entry_reference ?? null,
+        date: t.transaction_date ?? t.booking_date ?? t.value_date ?? null,
+        montant: montantAbsolu * signe,
+        devise: t.transaction_amount.currency,
+        libelle: t.remittance_information?.join(" ") ?? t.creditor?.name ?? t.debtor?.name ?? null,
+      };
+    }),
     continuationKey: brut.continuation_key ?? null,
   };
 }
