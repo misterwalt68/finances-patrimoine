@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { actifs, comptes, cours, institutions, parametres, positions, transactions } from "@/db/schema";
 import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
@@ -260,6 +260,89 @@ async function synchroniserTransactionsBancaires(): Promise<void> {
 }
 
 /**
+ * Le Livret A n'est légalement pas un "compte de paiement" au sens DSP2
+ * (art. 4(12) — vérifié via les Q&A EBA officiels) : aucun agrégateur DSP2,
+ * BoursoBank compris, n'est tenu de le rendre accessible en lecture directe.
+ * Solution retenue avec Maxime plutôt que de stocker son vrai mot de passe
+ * bancaire chez un agrégateur tiers (webscraping, ce que fait Finary/Powens
+ * pour ce type de compte) : puisque le Livret A n'est alimenté que par des
+ * virements internes depuis son compte courant BoursoBank — eux bien visibles
+ * en DSP2, avec le libellé "Livret A" en toutes lettres (vérifié sur son vrai
+ * historique bancaire) — on détecte ces virements pour estimer le solde,
+ * sans jamais avoir besoin d'accéder au Livret A lui-même.
+ *
+ * Chaque virement n'est appliqué qu'une fois (passage à `statut: "categorise"`,
+ * avec une note explicite) — jamais recompté à la synchro suivante. Le
+ * nouveau solde est ajouté comme une ligne d'historique dans `cours` (jamais
+ * un écrasement), pour garder une trace datée de chaque ajustement.
+ */
+async function ajusterSoldeLivretA(): Promise<void> {
+  const [compteCourant] = await db
+    .select({ id: comptes.id })
+    .from(comptes)
+    .innerJoin(institutions, eq(institutions.id, comptes.institutionId))
+    .where(and(eq(institutions.nom, "Boursorama Banque"), eq(comptes.libelle, "Compte courant")));
+  const [compteLivretA] = await db
+    .select({ id: comptes.id })
+    .from(comptes)
+    .innerJoin(institutions, eq(institutions.id, comptes.institutionId))
+    .where(and(eq(institutions.nom, "Boursorama Banque"), eq(comptes.libelle, "Livret A")));
+  if (!compteCourant || !compteLivretA) return;
+
+  const [positionLivretA] = await db.select().from(positions).where(eq(positions.compteId, compteLivretA.id));
+  if (!positionLivretA) return; // Livret A pas encore créé dans l'app
+
+  const mouvements = await db
+    .select({ id: transactions.id, montant: transactions.montant })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.compteId, compteCourant.id),
+        eq(transactions.statut, "a_categoriser"),
+        ilike(transactions.commercant, "%livret a%"),
+      ),
+    );
+  if (mouvements.length === 0) return;
+
+  // Un débit du compte courant (montant < 0) part vers le Livret A (+) ;
+  // un crédit (montant > 0) en revient (-) — signe inversé par rapport au
+  // compte courant.
+  const ajustement = mouvements.reduce((somme, m) => somme - Number(m.montant), 0);
+
+  const [dernierCours] = await db
+    .select()
+    .from(cours)
+    .where(eq(cours.actifId, positionLivretA.actifId))
+    .orderBy(desc(cours.horodatage))
+    .limit(1);
+  const soldeActuel = dernierCours ? Number(dernierCours.prix) : Number(positionLivretA.prixRevientMoyen ?? 0);
+  const nouveauSolde = soldeActuel + ajustement;
+
+  await db.insert(cours).values({
+    actifId: positionLivretA.actifId,
+    horodatage: new Date(),
+    prix: String(nouveauSolde),
+    source: "estimation_virements",
+  });
+  // Même sémantique que les autres comptes cash : le prix de revient suit
+  // toujours le solde estimé, pour ne jamais afficher de faux gain/perte.
+  await db
+    .update(positions)
+    .set({ prixRevientMoyen: String(nouveauSolde) })
+    .where(eq(positions.id, positionLivretA.id));
+
+  await db
+    .update(transactions)
+    .set({ statut: "categorise", note: "Virement interne vers/depuis le Livret A — pris en compte automatiquement" })
+    .where(
+      inArray(
+        transactions.id,
+        mouvements.map((m) => m.id),
+      ),
+    );
+}
+
+/**
  * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
  * retire des positions), rafraîchit le cours de tous les actifs ayant une
  * source automatique (dont les comptes bancaires DSP2), importe les
@@ -274,6 +357,7 @@ export async function actualiserCours() {
   const liste = await db.select().from(actifs);
   await Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id)));
   await synchroniserTransactionsBancaires().catch(() => null);
+  await ajusterSoldeLivretA().catch(() => null);
   await chargerHistoriqueMetaux().catch(() => null);
   revalidatePath("/patrimoine");
 }
