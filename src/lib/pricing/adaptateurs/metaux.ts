@@ -36,16 +36,22 @@ export const metaux: AdaptateurPrix = {
 export type PointHistorique = { date: Date; prix: number };
 
 /**
- * Historique quotidien de l'or (25+ ans), converti en €/gramme.
+ * Historique quotidien de l'or (25 ans), converti en €/gramme.
  *
  * goldprice.dev (utilisé pour le cours du jour ci-dessus) limite son
  * historique gratuit à 30 jours — vérifié en direct. Pour un vrai historique
  * long terme, on utilise l'endpoint "chart" de Yahoo Finance sur le contrat
- * à terme sur l'or (GC=F, COMEX) : gratuit, sans clé, aucune limite de
- * période rencontrée en pratique (testé jusqu'à "max", ~2000 à aujourd'hui).
- * C'est un endpoint non documenté officiellement par Yahoo — largement
- * utilisé par l'écosystème finance open source depuis des années, mais sans
- * garantie contractuelle de leur part ; à surveiller s'il venait à changer.
+ * à terme sur l'or (GC=F, COMEX) : gratuit, sans clé. C'est un endpoint non
+ * documenté officiellement par Yahoo — largement utilisé par l'écosystème
+ * finance open source depuis des années, mais sans garantie contractuelle
+ * de leur part ; à surveiller s'il venait à changer.
+ *
+ * Piège vérifié en direct (curl) : `range=max` semble accepter `interval=1d`
+ * mais renvoie en réalité un point par MOIS (Yahoo dégrade silencieusement
+ * la résolution au-delà d'un certain historique), ce qui aplatit le
+ * graphique récent en ligne quasi droite. `range=25y` renvoie bien un point
+ * par jour de bourse sur toute la période (~6300 points vérifiés) — largement
+ * suffisant pour cet usage personnel, donc utilisé à la place de "max".
  *
  * Coté en dollars par once troy (comme tout contrat COMEX) : converti en
  * euros via le taux EUR/USD *du jour* (rapport entre les deux cours au
@@ -59,7 +65,7 @@ export async function obtenirHistoriqueOr(): Promise<PointHistorique[]> {
   ]);
   const tauxEurParUsd = prixEur.prix / prixUsd.prix;
 
-  const url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=max&interval=1d";
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=25y&interval=1d";
   const reponse = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0" },
     cache: "no-store",

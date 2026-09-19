@@ -6,7 +6,7 @@ import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { TYPES_ACTIF } from "@/lib/constants";
 import { actualiserCours } from "./actions";
-import { FormulairePosition } from "./formulaire-position";
+import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
 import { SupprimerPositionBouton } from "./supprimer-position";
 import { IconeActif } from "@/lib/icones-actifs";
@@ -152,14 +152,23 @@ export default async function PagePatrimoine() {
             Patrimoine
           </h1>
         </div>
-        <form action={actualiserCours}>
-          <button
-            type="submit"
-            className="rounded-full border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            Actualiser les cours
-          </button>
-        </form>
+        <div className="flex items-center gap-2">
+          <form action={actualiserCours}>
+            <button
+              type="submit"
+              className="rounded-full border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:text-foreground"
+            >
+              Actualiser les cours
+            </button>
+          </form>
+          {!donneesInsuffisantes && (
+            <AjouterPosition
+              listeActifs={listeActifs}
+              listeComptes={listeComptes}
+              listeInstitutions={listeInstitutions}
+            />
+          )}
+        </div>
       </header>
 
       <Carte accent>
@@ -187,7 +196,7 @@ export default async function PagePatrimoine() {
       )}
 
       <div className="mt-6 space-y-6">
-        {donneesInsuffisantes ? (
+        {donneesInsuffisantes && (
           <ListeVide>
             Crée d&apos;abord un compte et un actif dans les{" "}
             <Link href="/reglages" className="text-accent">
@@ -195,12 +204,6 @@ export default async function PagePatrimoine() {
             </Link>
             .
           </ListeVide>
-        ) : (
-          <FormulairePosition
-            listeActifs={listeActifs}
-            listeComptes={listeComptes}
-            listeInstitutions={listeInstitutions}
-          />
         )}
 
         <div className="space-y-3">
@@ -209,7 +212,7 @@ export default async function PagePatrimoine() {
           ) : (
             groupes.map((groupe) => {
               return (
-                <details key={groupe.type} className="group rounded-2xl border border-line bg-surface open:pb-2" open>
+                <details key={groupe.type} className="group rounded-2xl border border-line bg-surface open:pb-2">
                   <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
                     <span className="font-medium text-foreground">
                       {groupe.label}

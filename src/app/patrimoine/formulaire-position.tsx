@@ -21,10 +21,13 @@ export function FormulairePosition({
   listeActifs,
   listeComptes,
   listeInstitutions,
+  onSuccess,
 }: {
   listeActifs: Actif[];
   listeComptes: Compte[];
   listeInstitutions: Institution[];
+  /** Appelé après un ajout réussi — permet au parent (ex. la modale) de se fermer. */
+  onSuccess?: () => void;
 }) {
   const [famille, setFamille] = useState("");
   const [metalSymbole, setMetalSymbole] = useState("");
@@ -40,6 +43,7 @@ export function FormulairePosition({
     setMetalSymbole("");
     setPoids("");
     setPrixAchatTotal("");
+    onSuccess?.();
     return null;
   }, null);
 

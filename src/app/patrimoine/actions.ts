@@ -91,56 +91,46 @@ export async function supprimerPosition(id: string) {
   revalidatePath("/patrimoine");
 }
 
-export type EtatHistoriqueOr =
-  | { statut: "repos" }
-  | { statut: "ok"; nombre: number }
-  | { statut: "erreur"; message: string };
-
 /**
- * Charge l'historique complet (25+ ans, Yahoo Finance) de l'or dans `cours`,
- * pour le graphique historique. Ré-exécutable sans dupliquer : les points
- * déjà enregistrés comme historique sont remplacés, pas cumulés.
+ * Recharge l'historique complet (25+ ans, Yahoo Finance) de l'or dans `cours`,
+ * pour le graphique historique — appelé à chaque "Actualiser les cours", plus
+ * besoin d'un bouton dédié maintenant que l'historique se charge en entier
+ * d'un coup. Ré-exécutable sans dupliquer : les points déjà enregistrés comme
+ * historique sont remplacés, pas cumulés.
  */
-export async function chargerHistoriqueOr(): Promise<EtatHistoriqueOr> {
-  try {
-    const [or] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, "XAU"));
-    if (!or) return { statut: "erreur", message: 'Actif "Or" introuvable.' };
+async function chargerHistoriqueOr(): Promise<void> {
+  const [or] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, "XAU"));
+  if (!or) return;
 
-    const points = await obtenirHistoriqueOr();
+  const points = await obtenirHistoriqueOr();
 
-    await db
-      .delete(cours)
-      .where(and(eq(cours.actifId, or.id), eq(cours.source, "metaux_historique")));
+  await db.delete(cours).where(and(eq(cours.actifId, or.id), eq(cours.source, "metaux_historique")));
 
-    if (points.length > 0) {
-      await db.insert(cours).values(
-        points.map((p) => ({
-          actifId: or.id,
-          horodatage: p.date,
-          prix: String(p.prix),
-          source: "metaux_historique",
-        })),
-      );
-    }
-
-    revalidatePath("/patrimoine");
-    return { statut: "ok", nombre: points.length };
-  } catch (e) {
-    return { statut: "erreur", message: e instanceof Error ? e.message : "Erreur inconnue" };
+  if (points.length > 0) {
+    await db.insert(cours).values(
+      points.map((p) => ({
+        actifId: or.id,
+        horodatage: p.date,
+        prix: String(p.prix),
+        source: "metaux_historique",
+      })),
+    );
   }
 }
 
 /**
  * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
- * retire des positions) puis rafraîchit le cours de tous les actifs ayant
- * une source automatique. Fusionné à la demande de Maxime — avoir un
- * encart Coinbase séparé n'apportait rien de plus qu'un bouton "tout
+ * retire des positions), rafraîchit le cours de tous les actifs ayant une
+ * source automatique, et ré-enregistre l'historique complet de l'or. Fusionné
+ * à la demande de Maxime — avoir un encart Coinbase séparé ou un bouton
+ * "Charger l'historique" séparé n'apportait rien de plus qu'un bouton "tout
  * actualiser" unique.
  */
 export async function actualiserCours() {
   await synchroniserCoinbase().catch(() => null);
   const liste = await db.select().from(actifs);
   await Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id)));
+  await chargerHistoriqueOr().catch(() => null);
   revalidatePath("/patrimoine");
 }
 
