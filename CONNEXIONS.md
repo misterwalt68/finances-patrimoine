@@ -68,3 +68,17 @@ Aucun secret n'est écrit ici — uniquement des identifiants publics (URL, noms
 - **Console Anthropic** (IA — dictée, photo de ticket, bilan mensuel) — SPEC.md §3.
 
 Ce fichier sera complété au fur et à mesure que chacun sera mis en place.
+
+---
+
+## Cours de l'or (goldprice.dev)
+
+**À quoi ça sert** : valorise automatiquement l'or physique (SPEC.md §5.6) une fois le poids saisi une fois.
+
+**Compte** : aucun — gratuit, sans clé API, sans inscription. Vérifié en direct (`curl`) avant intégration.
+
+**Endpoint** : `https://api.goldprice.dev/v1/prices?symbol=XAU-EUR-SPOT`. Renvoie le prix au comptant en once troy ; converti en €/gramme dans `src/lib/pricing/adaptateurs/metaux.ts` (÷ 31,1034768).
+
+**Pas de variable d'environnement** — rien à configurer, ni à casser.
+
+**Mis en place le** : 2026-09-19.

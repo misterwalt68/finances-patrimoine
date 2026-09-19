@@ -37,9 +37,10 @@ export const CONNEXIONS_CONNUES: DefinitionConnexion[] = [
     variablesRequises: ["TWELVEDATA_API_KEY"],
   },
   {
+    // goldprice.dev est gratuit et sans clé — toujours "configuré".
     cle: "metaux",
-    nom: "Cours des métaux",
-    variablesRequises: ["METALS_API_KEY"],
+    nom: "Cours de l'or",
+    variablesRequises: [],
   },
   {
     cle: "anthropic",
