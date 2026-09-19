@@ -34,6 +34,7 @@ async function requeteCoinbase<T>(chemin: string): Promise<T> {
 }
 
 type CompteCoinbaseBrut = {
+  id: string;
   name: string;
   balance: { amount: string; currency: string };
 };
@@ -49,6 +50,8 @@ export type SoldeCoinbase = {
   nomCompte: string;
   /** Détecté sur le nom du compte Coinbase (ex. "ETH staké") — pas de champ dédié côté API. */
   stake: boolean;
+  /** Comptes Coinbase bruts fusionnés dans ce solde (même devise + même statut de stake) — sert à aller chercher l'historique des transactions de chacun pour calculer le vrai prix de revient. */
+  comptesIds: string[];
 };
 
 /**
@@ -84,8 +87,9 @@ export async function obtenirSoldesCoinbase(): Promise<SoldeCoinbase[]> {
       const existant = parCle.get(cle);
       if (existant) {
         existant.quantite += quantite;
+        existant.comptesIds.push(compte.id);
       } else {
-        parCle.set(cle, { devise, quantite, nomCompte: compte.name, stake });
+        parCle.set(cle, { devise, quantite, nomCompte: compte.name, stake, comptesIds: [compte.id] });
       }
     }
 
@@ -93,4 +97,56 @@ export async function obtenirSoldesCoinbase(): Promise<SoldeCoinbase[]> {
   } while (curseur);
 
   return [...parCle.values()];
+}
+
+export type TransactionCoinbase = {
+  type: string;
+  /** Quantité de la devise du compte — positive si acquise, négative si sortie. */
+  montant: number;
+  /** Valeur en euros au moment de la transaction (signe aligné sur `montant`). */
+  montantNatifEur: number;
+  date: Date;
+};
+
+type TransactionCoinbaseBrute = {
+  type: string;
+  amount: { amount: string };
+  native_amount: { amount: string; currency: string };
+  created_at: string;
+};
+
+type ReponseTransactionsCoinbase = {
+  data: TransactionCoinbaseBrute[];
+  pagination: { next_starting_after: string | null };
+};
+
+/**
+ * Historique complet des mouvements d'un compte Coinbase (achats, ventes,
+ * conversions, envois/réceptions, récompenses de staking...) — sert à
+ * calculer le vrai prix de revient moyen (SPEC.md §7), Coinbase ne l'expose
+ * pas directement sur `/v2/accounts`.
+ */
+export async function obtenirTransactionsCoinbase(compteId: string): Promise<TransactionCoinbase[]> {
+  const transactions: TransactionCoinbase[] = [];
+  let curseur: string | undefined;
+
+  do {
+    const chemin = curseur
+      ? `/v2/accounts/${compteId}/transactions?limit=100&starting_after=${encodeURIComponent(curseur)}`
+      : `/v2/accounts/${compteId}/transactions?limit=100`;
+    const donnees = await requeteCoinbase<ReponseTransactionsCoinbase>(chemin);
+
+    for (const t of donnees.data) {
+      transactions.push({
+        type: t.type,
+        montant: Number(t.amount.amount),
+        montantNatifEur: Number(t.native_amount.amount),
+        date: new Date(t.created_at),
+      });
+    }
+
+    curseur = donnees.pagination?.next_starting_after ?? undefined;
+  } while (curseur);
+
+  return transactions;
 }

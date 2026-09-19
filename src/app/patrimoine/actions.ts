@@ -8,7 +8,8 @@ import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
 import { rechercherSurCoinGecko } from "@/lib/pricing/adaptateurs/coingecko";
 import { obtenirAdaptateur } from "@/lib/pricing/registre";
 import { obtenirHistoriqueOr } from "@/lib/pricing/adaptateurs/metaux";
-import { obtenirSoldesCoinbase } from "@/lib/coinbase/client";
+import { obtenirSoldesCoinbase, obtenirTransactionsCoinbase } from "@/lib/coinbase/client";
+import { calculerCoutBaseMoyen } from "@/lib/coinbase/cout-base";
 import { METAUX_PHYSIQUES } from "@/lib/constants";
 
 /** Trouve l'actif d'un métal (symbole fixe, cf. constants.ts) ou le crée. */
@@ -170,8 +171,11 @@ export type EtatSyncCoinbase =
  * - Toute position Coinbase existante (sur l'un ou l'autre compte) qui n'est
  *   plus retrouvée dans ce passage (vendue, ou repassée sous le seuil) est
  *   supprimée : Coinbase fait foi, pas l'historique local.
- * - Le prix de revient moyen n'est pas fourni par cette API et n'est jamais
- *   deviné ; s'il existe déjà (saisi à la main), il n'est pas touché.
+ * - Le prix de revient moyen est calculé à partir de l'historique réel des
+ *   transactions du compte (`calculerCoutBaseMoyen`, coût moyen pondéré) —
+ *   jamais deviné, jamais laissé à 0. Recalculé à chaque synchronisation
+ *   pour rester exact au fil des nouvelles récompenses de staking, qui
+ *   diluent le coût moyen.
  */
 export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
   try {
@@ -254,6 +258,21 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
       if (!presentsParCompte.has(compteCible.id)) presentsParCompte.set(compteCible.id, new Set());
       presentsParCompte.get(compteCible.id)!.add(actif.id);
 
+      // Coût de revient réel, calculé à partir de l'historique des
+      // transactions Coinbase du (ou des, si comptes fusionnés) compte(s)
+      // concerné(s) — jamais deviné. Un échec (API indisponible) ne doit pas
+      // faire planter toute la synchro : on garde alors l'ancienne valeur
+      // (mise à jour) ou on laisse vide (création).
+      let prixRevientMoyen: number | null = null;
+      try {
+        const transactions = (
+          await Promise.all(solde.comptesIds.map((id) => obtenirTransactionsCoinbase(id)))
+        ).flat();
+        prixRevientMoyen = calculerCoutBaseMoyen(transactions).coutUnitaire;
+      } catch {
+        prixRevientMoyen = null;
+      }
+
       const [positionExistante] = await db
         .select()
         .from(positions)
@@ -262,13 +281,18 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
       if (positionExistante) {
         await db
           .update(positions)
-          .set({ quantite: String(solde.quantite), updatedAt: new Date() })
+          .set({
+            quantite: String(solde.quantite),
+            updatedAt: new Date(),
+            ...(prixRevientMoyen !== null ? { prixRevientMoyen: String(prixRevientMoyen) } : {}),
+          })
           .where(eq(positions.id, positionExistante.id));
       } else {
         await db.insert(positions).values({
           compteId: compteCible.id,
           actifId: actif.id,
           quantite: String(solde.quantite),
+          prixRevientMoyen: prixRevientMoyen !== null ? String(prixRevientMoyen) : null,
         });
       }
 
