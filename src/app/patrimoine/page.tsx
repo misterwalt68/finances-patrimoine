@@ -260,6 +260,9 @@ export default async function PagePatrimoine() {
                               identifiantExterne={l.actif?.identifiantExterne}
                             />
                             {l.actif?.libelle ?? "—"}
+                            {l.actif?.type === "cash" && (
+                              <span className="text-sm font-normal text-muted">(compte courant)</span>
+                            )}
                           </p>
                           {l.calcul ? (
                             <p className="font-medium text-foreground">
