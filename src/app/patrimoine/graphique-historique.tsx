@@ -15,8 +15,37 @@ const PLAGES = [
   { valeur: "toujours", label: "Toujours", jours: Infinity },
 ] as const;
 
-const formatPrix = (n: number) =>
-  n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
+/**
+ * Nombre de décimales à afficher pour un prix — 2 suffisent pour l'or ou
+ * l'argent, mais le cuivre vaut quelques centimes le gramme : à 2 décimales
+ * tout s'arrondirait à "0,01 €" et les variations deviendraient invisibles.
+ * On garde environ 3 chiffres significatifs sous 1€.
+ */
+function decimalesPour(valeur: number): number {
+  const abs = Math.abs(valeur);
+  if (abs === 0 || abs >= 1) return 2;
+  return Math.min(6, 2 - Math.floor(Math.log10(abs)));
+}
+
+/**
+ * Décimales pour les graduations de l'axe Y — dérivées du PAS entre deux
+ * graduations, pas de leur valeur : sinon un pas de 0,0005€ (cuivre) se
+ * retrouve avec 6 décimales inutiles alors que 4 suffisent à le distinguer.
+ */
+function decimalesPourPas(pas: number): number {
+  if (pas >= 1) return 0;
+  return Math.max(0, -Math.floor(Math.log10(pas)));
+}
+
+const formatPrix = (n: number) => {
+  const decimales = decimalesPour(n);
+  return n.toLocaleString("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  });
+};
 
 const formatDateCourte = (d: Date, avecAnnee: boolean) =>
   d.toLocaleDateString("fr-FR", avecAnnee ? { month: "short", year: "2-digit" } : { day: "2-digit", month: "short" });
@@ -111,12 +140,16 @@ export function GraphiqueHistoriqueMetal({
 
     const ticksY: number[] = [];
     for (let v = Math.ceil(yMin / pasY) * pasY; v <= yMax; v += pasY) ticksY.push(v);
+    // Décimales dérivées du pas, pas de chaque valeur individuellement —
+    // sinon un tick tombant pile sur 0 afficherait moins de décimales que
+    // ses voisins.
+    const decimalesAxe = decimalesPourPas(pasY);
 
     const nbTicksX = 5;
     const avecAnnee = xMax - xMin > 400 * 24 * 60 * 60 * 1000;
     const ticksX = Array.from({ length: nbTicksX }, (_, i) => xMin + ((xMax - xMin) * i) / (nbTicksX - 1));
 
-    return { x, y, chemin, aire, ticksY, ticksX, avecAnnee, xMin, xMax };
+    return { x, y, chemin, aire, ticksY, ticksX, avecAnnee, xMin, xMax, decimalesAxe };
   }, [points, achats]);
 
   // Point de données le plus proche du curseur (position du doigt/souris) —
@@ -279,7 +312,10 @@ export function GraphiqueHistoriqueMetal({
                     strokeWidth={1}
                   />
                   <text x={MARGE.gauche - 6} y={graphique.y(v) + 3} fontSize="9" fill="var(--muted)" textAnchor="end">
-                    {Math.round(v).toLocaleString("fr-FR")}
+                    {v.toLocaleString("fr-FR", {
+                      minimumFractionDigits: graphique.decimalesAxe,
+                      maximumFractionDigits: graphique.decimalesAxe,
+                    })}
                   </text>
                 </g>
               ))}
