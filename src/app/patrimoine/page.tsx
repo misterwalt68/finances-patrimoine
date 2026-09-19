@@ -10,7 +10,7 @@ import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
 import { ModifierPositionBouton } from "./modifier-position";
 import { IconeActif } from "@/lib/icones-actifs";
-import { GraphiqueHistoriqueMetal } from "./graphique-historique";
+import { GraphiqueHistoriqueMetal, GraphiqueHistoriqueComptes } from "./graphique-historique";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -118,6 +118,27 @@ export default async function PagePatrimoine() {
       prix: l.prixRevientMoyen,
       poids: l.quantite,
       note: l.position.note,
+    });
+  }
+
+  // Données du graphique historique des comptes (cash) : un simple suivi de
+  // solde dans le temps, à partir de l'historique déjà accumulé dans `cours`
+  // à chaque actualisation — aucune donnée supplémentaire à stocker. Le
+  // libellé inclut le compte entre parenthèses (ex. "BoursoBank (Livret A)")
+  // pour distinguer deux comptes de la même banque, comme dans la liste.
+  const comptesGraphique = lignes
+    .filter((l) => l.actif?.type === "cash")
+    .map((l) => ({
+      actifId: l.actif!.id,
+      libelle: `${l.actif!.libelle}${l.compte?.libelle ? ` (${l.compte.libelle})` : ""}`,
+      identifiantExterne: l.actif!.identifiantExterne ?? null,
+    }));
+  const coursParActifCash: Record<string, { date: string; prix: number }[]> = {};
+  for (const c of listeCours) {
+    if (!comptesGraphique.some((cg) => cg.actifId === c.actifId)) continue;
+    (coursParActifCash[c.actifId] ??= []).push({
+      date: c.horodatage.toISOString(),
+      prix: Number(c.prix),
     });
   }
 
@@ -249,6 +270,9 @@ export default async function PagePatrimoine() {
                       coursParActif={coursParActifMetal}
                       achatsParActif={achatsParActifMetal}
                     />
+                  )}
+                  {groupe.type === "cash" && comptesGraphique.length > 0 && (
+                    <GraphiqueHistoriqueComptes comptes={comptesGraphique} coursParActif={coursParActifCash} />
                   )}
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => (

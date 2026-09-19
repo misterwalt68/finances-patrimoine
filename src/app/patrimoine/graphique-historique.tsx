@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { IconeMetal, couleurMetal } from "@/lib/icones-actifs";
+import { useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { IconeMetal, IconeBanque, couleurMetal, COULEUR_BANQUE } from "@/lib/icones-actifs";
 
 export type PointCours = { date: string; prix: number };
 export type MetalGraphique = { actifId: string; libelle: string; symbole: string };
 export type AchatMetal = { date: string; prix: number; poids: number; note: string | null };
+export type CompteGraphique = { actifId: string; libelle: string; identifiantExterne: string | null };
+
+/** Une courbe sélectionnable par onglet — métal, compte, ou toute autre famille avec un historique de `cours`. */
+type SerieGraphique = { id: string; libelle: string; couleur: string; icone: ReactNode };
+/** Marqueur vertical optionnel sur la courbe (ex. un achat de métal) — absent pour un simple suivi de solde. */
+type MarqueurGraphique = { date: string; prix: number; ligne2?: string };
 
 const PLAGES = [
   { valeur: "semaine", label: "1 semaine", jours: 7 },
@@ -71,16 +77,24 @@ function pasAgreable(intervalle: number, nbTicksVoulu: number): number {
   return pas * magnitude;
 }
 
-export function GraphiqueHistoriqueMetal({
-  metaux,
-  coursParActif,
-  achatsParActif,
+/**
+ * Courbe d'historique générique — un onglet par série (métal, compte…),
+ * plages de temps, curseur tactile, et marqueurs verticaux optionnels (les
+ * achats de métaux physiques). Toute famille qui accumule un historique dans
+ * `cours` peut réutiliser ce même composant plutôt que d'en réécrire un.
+ */
+function GraphiqueHistorique({
+  series,
+  coursParSerie,
+  marqueursParSerie,
+  suffixeUnite = "",
 }: {
-  metaux: MetalGraphique[];
-  coursParActif: Record<string, PointCours[]>;
-  achatsParActif: Record<string, AchatMetal[]>;
+  series: SerieGraphique[];
+  coursParSerie: Record<string, PointCours[]>;
+  marqueursParSerie?: Record<string, MarqueurGraphique[]>;
+  suffixeUnite?: string;
 }) {
-  const [metalId, setMetalId] = useState(metaux[0]?.actifId ?? "");
+  const [serieId, setSerieId] = useState(series[0]?.id ?? "");
   const [plage, setPlage] = useState<(typeof PLAGES)[number]["valeur"]>("mois");
   // Lu une seule fois (initialiseur paresseux) : Date.now() est impur et ne
   // doit pas être appelé directement pendant le rendu.
@@ -90,17 +104,17 @@ export function GraphiqueHistoriqueMetal({
   const [curseurActif, setCurseurActif] = useState(false);
   const [curseurTemps, setCurseurTemps] = useState<number | null>(null);
 
-  const metal = metaux.find((m) => m.actifId === metalId);
-  const couleur = metal ? couleurMetal(metal.symbole) : "#9a9a9a";
+  const serie = series.find((s) => s.id === serieId);
+  const couleur = serie?.couleur ?? "#9a9a9a";
   const joursPlage = PLAGES.find((p) => p.valeur === plage)!.jours;
   const seuil = Number.isFinite(joursPlage) ? maintenant - joursPlage * 24 * 60 * 60 * 1000 : -Infinity;
 
   const tousLesPoints = useMemo(
     () =>
-      (coursParActif[metalId] ?? [])
+      (coursParSerie[serieId] ?? [])
         .map((p) => ({ date: new Date(p.date), prix: p.prix }))
         .sort((a, b) => a.date.getTime() - b.date.getTime()),
-    [coursParActif, metalId],
+    [coursParSerie, serieId],
   );
 
   const points = useMemo(
@@ -108,11 +122,11 @@ export function GraphiqueHistoriqueMetal({
     [tousLesPoints, seuil],
   );
 
-  const achats = useMemo(() => {
-    return (achatsParActif[metalId] ?? [])
-      .map((a) => ({ ...a, date: new Date(a.date) }))
-      .filter((a) => a.date.getTime() >= seuil);
-  }, [achatsParActif, metalId, seuil]);
+  const marqueurs = useMemo(() => {
+    return (marqueursParSerie?.[serieId] ?? [])
+      .map((m) => ({ ...m, date: new Date(m.date) }))
+      .filter((m) => m.date.getTime() >= seuil);
+  }, [marqueursParSerie, serieId, seuil]);
 
   const dernierPrixConnu = tousLesPoints.at(-1)?.prix;
   const premierPrixPeriode = points[0]?.prix;
@@ -121,11 +135,11 @@ export function GraphiqueHistoriqueMetal({
     if (points.length < 2) return null;
     const dates = points.map((p) => p.date.getTime());
     const prix = points.map((p) => p.prix);
-    const achatsPrix = achats.map((a) => a.prix);
+    const marqueursPrix = marqueurs.map((m) => m.prix);
     const xMin = Math.min(...dates);
     const xMax = Math.max(...dates);
-    const yDonneesMin = Math.min(...prix, ...achatsPrix);
-    const yDonneesMax = Math.max(...prix, ...achatsPrix);
+    const yDonneesMin = Math.min(...prix, ...marqueursPrix);
+    const yDonneesMax = Math.max(...prix, ...marqueursPrix);
     const pasY = pasAgreable(yDonneesMax - yDonneesMin || yDonneesMax || 1, 4);
     const yMin = Math.max(0, Math.floor(yDonneesMin / pasY) * pasY - pasY);
     const yMax = Math.ceil(yDonneesMax / pasY) * pasY + pasY;
@@ -150,7 +164,7 @@ export function GraphiqueHistoriqueMetal({
     const ticksX = Array.from({ length: nbTicksX }, (_, i) => xMin + ((xMax - xMin) * i) / (nbTicksX - 1));
 
     return { x, y, chemin, aire, ticksY, ticksX, avecAnnee, xMin, xMax, decimalesAxe };
-  }, [points, achats]);
+  }, [points, marqueurs]);
 
   // Point de données le plus proche du curseur (position du doigt/souris) —
   // seulement pendant une interaction active, sinon on reste sur "aujourd'hui".
@@ -168,37 +182,37 @@ export function GraphiqueHistoriqueMetal({
     return proche;
   }, [curseurTemps, points]);
 
-  // Accroche sur une ligne d'achat quand le curseur en est tout proche
-  // (en distance à l'écran, pas en temps) — inspiré du survol des tooltips
+  // Accroche sur un marqueur quand le curseur en est tout proche (en
+  // distance à l'écran, pas en temps) — inspiré du survol des tooltips
   // Shopify qui "capturent" le point de données le plus proche.
-  const achatProche = useMemo(() => {
-    if (curseurTemps === null || !graphique || achats.length === 0) return null;
+  const marqueurProche = useMemo(() => {
+    if (curseurTemps === null || !graphique || marqueurs.length === 0) return null;
     const curseurX = graphique.x(curseurTemps);
-    let proche: (typeof achats)[number] | null = null;
+    let proche: (typeof marqueurs)[number] | null = null;
     let ecart = Infinity;
-    for (const a of achats) {
-      const e = Math.abs(graphique.x(a.date.getTime()) - curseurX);
+    for (const m of marqueurs) {
+      const e = Math.abs(graphique.x(m.date.getTime()) - curseurX);
       if (e < ecart) {
         ecart = e;
-        proche = a;
+        proche = m;
       }
     }
     return proche && ecart <= SEUIL_ACCROCHE ? proche : null;
-  }, [curseurTemps, achats, graphique]);
+  }, [curseurTemps, marqueurs, graphique]);
 
   const prixAffiche = pointSurvole ? pointSurvole.prix : dernierPrixConnu;
-  // Une fois accroché à un achat, la date affichée est celle de l'achat (là
-  // où la ligne verticale se trouve visuellement), pas celle — parfois
+  // Une fois accroché à un marqueur, la date affichée est celle du marqueur
+  // (là où la ligne verticale se trouve visuellement), pas celle — parfois
   // légèrement décalée par des trous dans l'historique — du cours connu le
   // plus proche.
-  const dateAffichee = achatProche ? achatProche.date : pointSurvole?.date ?? null;
+  const dateAffichee = marqueurProche ? marqueurProche.date : pointSurvole?.date ?? null;
   const variation =
     prixAffiche !== undefined && premierPrixPeriode !== undefined && premierPrixPeriode !== 0
       ? ((prixAffiche - premierPrixPeriode) / premierPrixPeriode) * 100
       : null;
-  const performanceAchat =
-    achatProche && dernierPrixConnu !== undefined
-      ? ((dernierPrixConnu - achatProche.prix) / achatProche.prix) * 100
+  const performanceMarqueur =
+    marqueurProche && dernierPrixConnu !== undefined
+      ? ((dernierPrixConnu - marqueurProche.prix) / marqueurProche.prix) * 100
       : null;
 
   function positionCurseur(clientX: number) {
@@ -231,34 +245,39 @@ export function GraphiqueHistoriqueMetal({
   }
 
   const curseurX = graphique && dateAffichee ? graphique.x(dateAffichee.getTime()) : null;
-  // Position horizontale (en %) de l'encart d'achat, resserrée pour ne pas
-  // déborder du graphique près des bords sur petit écran.
-  const achatEncartGauche =
-    graphique && achatProche ? Math.min(85, Math.max(15, (graphique.x(achatProche.date.getTime()) / LARGEUR) * 100)) : null;
+  // Position horizontale (en %) de l'encart du marqueur, resserrée pour ne
+  // pas déborder du graphique près des bords sur petit écran.
+  const marqueurEncartGauche =
+    graphique && marqueurProche
+      ? Math.min(85, Math.max(15, (graphique.x(marqueurProche.date.getTime()) / LARGEUR) * 100))
+      : null;
 
   return (
     <div className="border-b border-line px-4 py-4">
       <div className="flex flex-wrap gap-1.5">
-        {metaux.map((m) => (
+        {series.map((s) => (
           <button
-            key={m.actifId}
+            key={s.id}
             type="button"
-            onClick={() => setMetalId(m.actifId)}
+            onClick={() => setSerieId(s.id)}
             className={
-              m.actifId === metalId
+              s.id === serieId
                 ? "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-accent-foreground"
                 : "flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs text-muted"
             }
-            style={m.actifId === metalId ? { backgroundColor: couleurMetal(m.symbole) } : undefined}
+            style={s.id === serieId ? { backgroundColor: s.couleur } : undefined}
           >
-            <IconeMetal symbole={m.symbole} className="h-2.5 w-4" />
-            {m.libelle}
+            {s.icone}
+            {s.libelle}
           </button>
         ))}
       </div>
 
       <div className="mt-4 flex items-start justify-between">
-        <p className="text-sm text-muted">{metal?.libelle} · €/gramme</p>
+        <p className="text-sm text-muted">
+          {serie?.libelle}
+          {suffixeUnite}
+        </p>
         {prixAffiche !== undefined && (
           <div className="text-right">
             <p className="flex items-baseline justify-end gap-2">
@@ -333,9 +352,9 @@ export function GraphiqueHistoriqueMetal({
                 </text>
               ))}
 
-              {achats.map((a, i) => {
-                const cx = graphique.x(a.date.getTime());
-                const proche = achatProche === a;
+              {marqueurs.map((m, i) => {
+                const cx = graphique.x(m.date.getTime());
+                const proche = marqueurProche === m;
                 return (
                   <line
                     key={i}
@@ -348,8 +367,8 @@ export function GraphiqueHistoriqueMetal({
                     strokeDasharray="3 3"
                   >
                     <title>
-                      Achat le {a.date.toLocaleDateString("fr-FR")} à {formatPrix(a.prix)}
-                      {a.note ? ` (${a.note})` : ""}
+                      {m.date.toLocaleDateString("fr-FR")} — {formatPrix(m.prix)}
+                      {m.ligne2 ? ` (${m.ligne2})` : ""}
                     </title>
                   </line>
                 );
@@ -380,24 +399,23 @@ export function GraphiqueHistoriqueMetal({
               )}
             </svg>
 
-            {curseurActif && achatProche && achatEncartGauche !== null && (
+            {curseurActif && marqueurProche && marqueurEncartGauche !== null && (
               <div
                 className="pointer-events-none absolute top-1 z-10 w-40 -translate-x-1/2 rounded-xl border border-line bg-surface px-3 py-2 shadow-lg"
-                style={{ left: `${achatEncartGauche}%` }}
+                style={{ left: `${marqueurEncartGauche}%` }}
               >
                 <p className="flex items-center gap-1.5 text-[11px] text-muted">
                   <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: couleur }} />
-                  Achat du {formatDateLongue(achatProche.date)}
+                  Achat du {formatDateLongue(marqueurProche.date)}
                 </p>
                 <p className="mt-1 inline-block rounded bg-background px-2 py-0.5 text-sm font-medium text-foreground">
-                  {formatPrix(achatProche.prix)}
+                  {formatPrix(marqueurProche.prix)}
                 </p>
-                <p className="mt-1 text-[11px] text-muted">
-                  {achatProche.poids} g{achatProche.note ? ` · ${achatProche.note}` : ""}
-                </p>
-                {performanceAchat !== null && (
-                  <p className={`mt-1 text-[11px] ${performanceAchat >= 0 ? "text-positive" : "text-negative"}`}>
-                    {performanceAchat >= 0 ? "▲" : "▼"} {Math.abs(performanceAchat).toFixed(1)}% depuis l&apos;achat
+                {marqueurProche.ligne2 && <p className="mt-1 text-[11px] text-muted">{marqueurProche.ligne2}</p>}
+                {performanceMarqueur !== null && (
+                  <p className={`mt-1 text-[11px] ${performanceMarqueur >= 0 ? "text-positive" : "text-negative"}`}>
+                    {performanceMarqueur >= 0 ? "▲" : "▼"} {Math.abs(performanceMarqueur).toFixed(1)}% depuis
+                    l&apos;achat
                   </p>
                 )}
               </div>
@@ -424,4 +442,59 @@ export function GraphiqueHistoriqueMetal({
       </div>
     </div>
   );
+}
+
+/** Façade métaux (achats affichés en marqueurs, unité €/gramme) — historique. */
+export function GraphiqueHistoriqueMetal({
+  metaux,
+  coursParActif,
+  achatsParActif,
+}: {
+  metaux: MetalGraphique[];
+  coursParActif: Record<string, PointCours[]>;
+  achatsParActif: Record<string, AchatMetal[]>;
+}) {
+  const series = metaux.map((m) => ({
+    id: m.actifId,
+    libelle: m.libelle,
+    couleur: couleurMetal(m.symbole),
+    icone: <IconeMetal symbole={m.symbole} className="h-2.5 w-4" />,
+  }));
+  const marqueursParSerie = Object.fromEntries(
+    Object.entries(achatsParActif).map(([actifId, achats]) => [
+      actifId,
+      achats.map((a) => ({
+        date: a.date,
+        prix: a.prix,
+        ligne2: `${a.poids} g${a.note ? ` · ${a.note}` : ""}`,
+      })),
+    ]),
+  );
+
+  return (
+    <GraphiqueHistorique
+      series={series}
+      coursParSerie={coursParActif}
+      marqueursParSerie={marqueursParSerie}
+      suffixeUnite=" · €/gramme"
+    />
+  );
+}
+
+/** Façade comptes (BoursoBank, Trade Republic, Livret A…) — simple suivi de solde, sans marqueur. */
+export function GraphiqueHistoriqueComptes({
+  comptes,
+  coursParActif,
+}: {
+  comptes: CompteGraphique[];
+  coursParActif: Record<string, PointCours[]>;
+}) {
+  const series = comptes.map((c) => ({
+    id: c.actifId,
+    libelle: c.libelle,
+    couleur: COULEUR_BANQUE,
+    icone: <IconeBanque identifiantExterne={c.identifiantExterne} className="h-4 w-4" />,
+  }));
+
+  return <GraphiqueHistorique series={series} coursParSerie={coursParActif} />;
 }

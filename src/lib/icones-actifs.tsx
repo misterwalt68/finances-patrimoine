@@ -51,7 +51,7 @@ export function IconeCrypto({ code, className }: { code: string; className?: str
 // Couleur de repli de la famille "cash" dans le camembert (src/app/
 // patrimoine/camembert.tsx), utilisée seulement quand aucun logo de banque
 // n'est disponible pour ce compte.
-const COULEUR_BANQUE = "#9085e9";
+export const COULEUR_BANQUE = "#9085e9";
 
 /** Vrais logos de banque, un par établissement DSP2 connu (public/logos/). */
 const LOGOS_BANQUE: Record<string, string> = {
