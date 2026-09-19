@@ -8,15 +8,41 @@ import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
 import { rechercherSurCoinGecko } from "@/lib/pricing/adaptateurs/coingecko";
 import { obtenirAdaptateur } from "@/lib/pricing/registre";
 import { obtenirSoldesCoinbase } from "@/lib/coinbase/client";
+import { METAUX_PHYSIQUES } from "@/lib/constants";
+
+/** Trouve l'actif d'un métal (symbole fixe, cf. constants.ts) ou le crée. */
+async function trouverOuCreerActifMetal(symbole: string) {
+  const [existant] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, symbole));
+  if (existant) return existant;
+
+  const metal = METAUX_PHYSIQUES.find((m) => m.symbole === symbole);
+  if (!metal) throw new Error(`Métal inconnu : ${symbole}`);
+
+  const [cree] = await db
+    .insert(actifs)
+    .values({
+      libelle: metal.libelle,
+      type: "metal",
+      identifiantExterne: metal.symbole,
+      sourcePrix: metal.sourcePrix,
+      identifiantSource: metal.sourcePrix === "metaux" ? metal.symbole : null,
+      devise: "EUR",
+    })
+    .returning();
+  return cree;
+}
 
 export async function creerPosition(formData: FormData) {
   const compteId = String(formData.get("compteId") ?? "").trim();
-  const actifId = String(formData.get("actifId") ?? "").trim();
+  const metalSymbole = String(formData.get("metalSymbole") ?? "").trim();
+  const actifIdBrut = String(formData.get("actifId") ?? "").trim();
   const quantite = String(formData.get("quantite") ?? "").trim();
   const prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
-  if (!compteId || !actifId || !quantite) return;
+  if (!compteId || !quantite || (!actifIdBrut && !metalSymbole)) return;
+
+  const actifId = metalSymbole ? (await trouverOuCreerActifMetal(metalSymbole)).id : actifIdBrut;
 
   await db.insert(positions).values({
     compteId,
@@ -26,6 +52,19 @@ export async function creerPosition(formData: FormData) {
     note: note || null,
     dateAcquisition: dateAcquisition || null,
   });
+
+  // Un métal en cours manuel n'a pas d'adaptateur : le prix d'achat saisi
+  // sert de première valeur connue, sinon la position resterait sans cours.
+  const metal = METAUX_PHYSIQUES.find((m) => m.symbole === metalSymbole);
+  if (metal?.sourcePrix === "manuel" && prixRevientMoyen) {
+    await db.insert(cours).values({
+      actifId,
+      horodatage: new Date(),
+      prix: prixRevientMoyen,
+      source: "manuel",
+    });
+  }
+
   revalidatePath("/patrimoine");
 }
 

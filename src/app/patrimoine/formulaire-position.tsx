@@ -1,14 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { Champ, ChampSelect } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { Carte } from "@/components/ui/carte";
+import { TYPES_ACTIF, METAUX_PHYSIQUES } from "@/lib/constants";
 import { creerPosition } from "./actions";
 
 type Actif = { id: string; libelle: string; type: string };
 type Compte = { id: string; libelle: string; institutionId: string };
 type Institution = { id: string; nom: string };
+
+// La crypto se gère automatiquement via la synchronisation Coinbase — pas
+// d'ajout manuel proposé pour cette famille.
+const FAMILLES = TYPES_ACTIF.filter((t) => t.value !== "crypto");
 
 export function FormulairePosition({
   listeActifs,
@@ -19,17 +24,31 @@ export function FormulairePosition({
   listeComptes: Compte[];
   listeInstitutions: Institution[];
 }) {
-  const [actifId, setActifId] = useState("");
+  const [famille, setFamille] = useState("");
+  const [metalSymbole, setMetalSymbole] = useState("");
   const [poids, setPoids] = useState("");
   const [prixAchatTotal, setPrixAchatTotal] = useState("");
+
+  // Remet le formulaire à zéro après un ajout réussi, plutôt que de laisser
+  // traîner les valeurs du dernier ajout — réinitialisé dans l'action elle-
+  // même (pas un effet) puisque c'est en réponse à la soumission.
+  const [, lancer] = useActionState(async (_etat: null, formData: FormData) => {
+    await creerPosition(formData);
+    setFamille("");
+    setMetalSymbole("");
+    setPoids("");
+    setPrixAchatTotal("");
+    return null;
+  }, null);
 
   const institutionsParId = useMemo(
     () => new Map(listeInstitutions.map((i) => [i.id, i])),
     [listeInstitutions],
   );
 
-  const actifSelectionne = listeActifs.find((a) => a.id === actifId);
-  const estMetal = actifSelectionne?.type === "metal";
+  const estMetal = famille === "metal";
+  const actifsDeLaFamille = listeActifs.filter((a) => a.type === famille);
+  const peutSoumettre = estMetal ? metalSymbole !== "" : famille !== "" && actifsDeLaFamille.length > 0;
 
   const prixParGramme =
     estMetal && Number(poids) > 0 && Number(prixAchatTotal) > 0
@@ -38,67 +57,113 @@ export function FormulairePosition({
 
   return (
     <Carte>
-      <form action={creerPosition} className="space-y-3">
+      <form action={lancer} className="space-y-3">
         <ChampSelect
-          label="Qu'est-ce que tu ajoutes ?"
-          name="actifId"
-          required
-          value={actifId}
-          onChange={(e) => setActifId(e.target.value)}
+          label="Qu'est-ce que tu souhaites ajouter ?"
+          value={famille}
+          onChange={(e) => {
+            setFamille(e.target.value);
+            setMetalSymbole("");
+          }}
         >
           <option value="" disabled>
-            Choisir…
+            Choisir une famille…
           </option>
-          {listeActifs.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.libelle}
+          {FAMILLES.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
             </option>
           ))}
         </ChampSelect>
 
-        <ChampSelect label="Compte" name="compteId" required defaultValue="">
-          <option value="" disabled>
-            Choisir…
-          </option>
-          {listeComptes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
-            </option>
-          ))}
-        </ChampSelect>
-
-        {estMetal ? (
+        {famille === "" ? null : estMetal ? (
           <>
-            <Champ
-              label="Poids (grammes)"
-              name="quantite"
-              type="number"
-              inputMode="decimal"
-              step="any"
+            <ChampSelect
+              label="Quel métal ?"
+              name="metalSymbole"
               required
-              value={poids}
-              onChange={(e) => setPoids(e.target.value)}
-            />
-            <Champ
-              label="Prix d'achat (€)"
-              type="number"
-              inputMode="decimal"
-              step="any"
-              value={prixAchatTotal}
-              onChange={(e) => setPrixAchatTotal(e.target.value)}
-            />
-            <input type="hidden" name="prixRevientMoyen" value={prixParGramme} />
-            <ChampSelect label="Type" name="note" defaultValue="">
-              <option value="">Choisir…</option>
-              <option value="Pièce">Pièce</option>
-              <option value="Lingotin">Lingotin</option>
-              <option value="Bijou">Bijou</option>
-              <option value="Autre">Autre</option>
+              value={metalSymbole}
+              onChange={(e) => setMetalSymbole(e.target.value)}
+            >
+              <option value="" disabled>
+                Choisir…
+              </option>
+              {METAUX_PHYSIQUES.map((m) => (
+                <option key={m.symbole} value={m.symbole}>
+                  {m.libelle}
+                  {m.sourcePrix === "manuel" ? " (cours manuel)" : ""}
+                </option>
+              ))}
             </ChampSelect>
-            <Champ label="Date d'achat" name="dateAcquisition" type="date" />
+
+            {metalSymbole && (
+              <>
+                <ChampSelect label="Compte" name="compteId" required defaultValue="">
+                  <option value="" disabled>
+                    Choisir…
+                  </option>
+                  {listeComptes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
+                    </option>
+                  ))}
+                </ChampSelect>
+                <Champ
+                  label="Poids (grammes)"
+                  name="quantite"
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  required
+                  value={poids}
+                  onChange={(e) => setPoids(e.target.value)}
+                />
+                <Champ
+                  label="Prix d'achat (€)"
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={prixAchatTotal}
+                  onChange={(e) => setPrixAchatTotal(e.target.value)}
+                />
+                <input type="hidden" name="prixRevientMoyen" value={prixParGramme} />
+                <ChampSelect label="Type" name="note" defaultValue="">
+                  <option value="">Choisir…</option>
+                  <option value="Pièce">Pièce</option>
+                  <option value="Lingotin">Lingotin</option>
+                  <option value="Bijou">Bijou</option>
+                  <option value="Autre">Autre</option>
+                </ChampSelect>
+                <Champ label="Date d'achat" name="dateAcquisition" type="date" />
+              </>
+            )}
           </>
+        ) : actifsDeLaFamille.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-muted">
+            Aucun actif de ce type pour l&apos;instant — crée-le d&apos;abord dans les réglages.
+          </p>
         ) : (
           <>
+            <ChampSelect label="Actif" name="actifId" required defaultValue="">
+              <option value="" disabled>
+                Choisir…
+              </option>
+              {actifsDeLaFamille.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.libelle}
+                </option>
+              ))}
+            </ChampSelect>
+            <ChampSelect label="Compte" name="compteId" required defaultValue="">
+              <option value="" disabled>
+                Choisir…
+              </option>
+              {listeComptes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
+                </option>
+              ))}
+            </ChampSelect>
             <Champ
               label="Quantité"
               name="quantite"
@@ -124,9 +189,11 @@ export function FormulairePosition({
           </>
         )}
 
-        <Bouton type="submit" className="w-full">
-          Ajouter
-        </Bouton>
+        {peutSoumettre && (
+          <Bouton type="submit" className="w-full">
+            Ajouter
+          </Bouton>
+        )}
       </form>
     </Carte>
   );
