@@ -7,6 +7,7 @@ import { Bouton } from "@/components/ui/bouton";
 import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { creerPosition, actualiserCours } from "./actions";
+import { ApercuCoinbase } from "./apercu-coinbase";
 
 const formatEur = (n: number) =>
   n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -93,6 +94,8 @@ export default async function PagePatrimoine() {
       </Carte>
 
       <div className="mt-6 space-y-6">
+        <ApercuCoinbase />
+
         {donneesInsuffisantes ? (
           <ListeVide>
             Crée d&apos;abord un compte et un actif dans les{" "}
