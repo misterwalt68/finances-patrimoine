@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { comptes, institutions, personnes, enveloppes } from "@/db/schema";
 import { Champ, ChampSelect } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
+import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { creerCompte } from "./actions";
 
 export default async function PageComptes() {
@@ -20,64 +21,74 @@ export default async function PageComptes() {
     listeInstitutions.length === 0 || listePersonnes.length === 0 || listeEnveloppes.length === 0;
 
   return (
-    <div className="space-y-6 pt-2">
+    <div className="space-y-6">
       {donneesInsuffisantes ? (
-        <p className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Crée d&apos;abord au moins un établissement, une personne et une enveloppe.
-        </p>
+        <ListeVide>Crée d&apos;abord au moins un établissement, une personne et une enveloppe.</ListeVide>
       ) : (
-        <form action={creerCompte} className="space-y-3">
-          <Champ label="Libellé" name="libelle" placeholder="Compte courant" required />
-          <ChampSelect label="Établissement" name="institutionId" required defaultValue="">
-            <option value="" disabled>
-              Choisir…
-            </option>
-            {listeInstitutions.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.nom}
+        <Carte>
+          <form action={creerCompte} className="space-y-3">
+            <Champ label="Libellé" name="libelle" placeholder="Compte courant" required />
+            <ChampSelect label="Établissement" name="institutionId" required defaultValue="">
+              <option value="" disabled>
+                Choisir…
               </option>
-            ))}
-          </ChampSelect>
-          <ChampSelect label="Personne" name="personneId" required defaultValue="">
-            <option value="" disabled>
-              Choisir…
-            </option>
-            {listePersonnes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.libelle}
+              {listeInstitutions.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.nom}
+                </option>
+              ))}
+            </ChampSelect>
+            <ChampSelect label="Personne" name="personneId" required defaultValue="">
+              <option value="" disabled>
+                Choisir…
               </option>
-            ))}
-          </ChampSelect>
-          <ChampSelect label="Enveloppe" name="enveloppeId" required defaultValue="">
-            <option value="" disabled>
-              Choisir…
-            </option>
-            {listeEnveloppes.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.libelle}
+              {listePersonnes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.libelle}
+                </option>
+              ))}
+            </ChampSelect>
+            <ChampSelect label="Enveloppe" name="enveloppeId" required defaultValue="">
+              <option value="" disabled>
+                Choisir…
               </option>
-            ))}
-          </ChampSelect>
-          <Champ label="Devise" name="devise" placeholder="EUR" defaultValue="EUR" />
-          <Bouton type="submit">Ajouter</Bouton>
-        </form>
+              {listeEnveloppes.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.libelle}
+                </option>
+              ))}
+            </ChampSelect>
+            <Champ label="Devise" name="devise" placeholder="EUR" defaultValue="EUR" />
+            <Bouton type="submit" className="w-full">
+              Ajouter
+            </Bouton>
+          </form>
+        </Carte>
       )}
 
-      <ul className="divide-y divide-line rounded-lg border border-line">
-        {liste.map((c) => (
-          <li key={c.id} className="px-4 py-3">
-            <p className="text-foreground">{c.libelle}</p>
-            <p className="text-sm text-muted">
-              {institutionsParId.get(c.institutionId)?.nom ?? "—"} ·{" "}
-              {enveloppesParId.get(c.enveloppeId)?.libelle ?? "—"} ·{" "}
-              {personnesParId.get(c.personneId)?.libelle ?? "—"}
-            </p>
-          </li>
-        ))}
-        {liste.length === 0 && (
-          <li className="px-4 py-3 text-sm text-muted">Aucun compte pour l&apos;instant.</li>
+      <div className="space-y-2">
+        <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+          {liste.length} compte{liste.length > 1 ? "s" : ""}
+        </h2>
+        {liste.length === 0 ? (
+          <ListeVide>Aucun compte pour l&apos;instant.</ListeVide>
+        ) : (
+          <Carte>
+            <ul className="divide-y divide-line">
+              {liste.map((c) => (
+                <li key={c.id} className="py-3 first:pt-0 last:pb-0">
+                  <p className="font-medium text-foreground">{c.libelle}</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <Badge>{institutionsParId.get(c.institutionId)?.nom ?? "—"}</Badge>
+                    <Badge>{enveloppesParId.get(c.enveloppeId)?.libelle ?? "—"}</Badge>
+                    <Badge>{personnesParId.get(c.personneId)?.libelle ?? "—"}</Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Carte>
         )}
-      </ul>
+      </div>
     </div>
   );
 }
