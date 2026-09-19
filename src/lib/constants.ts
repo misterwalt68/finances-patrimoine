@@ -27,7 +27,7 @@ export const TYPES_ACTIF = [
   { value: "metal", label: "Métal" },
   { value: "fonds", label: "Fonds / unité de compte" },
   { value: "immobilier", label: "Immobilier (parts)" },
-  { value: "cash", label: "Cash" },
+  { value: "cash", label: "Comptes" },
   { value: "autre", label: "Autre" },
 ] as const;
 
@@ -37,6 +37,7 @@ export const SOURCES_PRIX = [
   { value: "coingecko", label: "CoinGecko" },
   { value: "twelvedata", label: "Twelve Data" },
   { value: "metaux", label: "Cours des métaux" },
+  { value: "enable_banking", label: "Enable Banking (DSP2)" },
   { value: "manuel", label: "Manuel" },
 ] as const;
 

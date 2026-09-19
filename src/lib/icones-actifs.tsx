@@ -48,6 +48,30 @@ export function IconeCrypto({ code, className }: { code: string; className?: str
   );
 }
 
+// Même couleur que la famille "cash" dans le camembert (src/app/patrimoine/
+// camembert.tsx) — c'est l'identité de la famille "Comptes", pas d'une
+// banque en particulier (jamais de logo de marque, cf. SPEC.md).
+const COULEUR_BANQUE = "#9085e9";
+
+export function IconeBanque({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-flex shrink-0 items-center justify-center rounded-full ${className ?? "h-5 w-5"}`}
+      style={{ backgroundColor: COULEUR_BANQUE }}
+    >
+      <svg viewBox="0 0 24 24" fill="#0b0c0e" className="h-3 w-3">
+        <polygon points="12,2 22,8 2,8" />
+        <rect x="4" y="9" width="2" height="9" />
+        <rect x="8" y="9" width="2" height="9" />
+        <rect x="12" y="9" width="2" height="9" />
+        <rect x="16" y="9" width="2" height="9" />
+        <rect x="2" y="19" width="20" height="2" />
+      </svg>
+    </span>
+  );
+}
+
 /** Choisit la bonne icône selon le type et le symbole externe de l'actif. */
 export function IconeActif({
   type,
@@ -58,5 +82,6 @@ export function IconeActif({
 }): ReactNode {
   if (type === "metal" && identifiantExterne) return <IconeMetal symbole={identifiantExterne} />;
   if (type === "crypto" && identifiantExterne) return <IconeCrypto code={identifiantExterne} />;
+  if (type === "cash") return <IconeBanque />;
   return null;
 }
