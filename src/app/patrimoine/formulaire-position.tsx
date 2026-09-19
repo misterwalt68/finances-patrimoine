@@ -4,6 +4,8 @@ import { useActionState, useMemo, useState } from "react";
 import { Champ, ChampSelect } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { Carte } from "@/components/ui/carte";
+import { MenuIcone } from "@/components/ui/menu-icone";
+import { IconeMetal } from "@/lib/icones-actifs";
 import { TYPES_ACTIF, METAUX_PHYSIQUES } from "@/lib/constants";
 import { creerPosition } from "./actions";
 
@@ -78,23 +80,17 @@ export function FormulairePosition({
 
         {famille === "" ? null : estMetal ? (
           <>
-            <ChampSelect
+            <MenuIcone
               label="Quel métal ?"
               name="metalSymbole"
-              required
               value={metalSymbole}
-              onChange={(e) => setMetalSymbole(e.target.value)}
-            >
-              <option value="" disabled>
-                Choisir…
-              </option>
-              {METAUX_PHYSIQUES.map((m) => (
-                <option key={m.symbole} value={m.symbole}>
-                  {m.libelle}
-                  {m.sourcePrix === "manuel" ? " (cours manuel)" : ""}
-                </option>
-              ))}
-            </ChampSelect>
+              onChange={setMetalSymbole}
+              options={METAUX_PHYSIQUES.map((m) => ({
+                value: m.symbole,
+                label: m.libelle + (m.sourcePrix === "manuel" ? " (cours manuel)" : ""),
+                icone: <IconeMetal symbole={m.symbole} />,
+              }))}
+            />
 
             {metalSymbole && (
               <>

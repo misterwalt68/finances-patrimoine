@@ -10,6 +10,9 @@ import { ApercuCoinbase } from "./apercu-coinbase";
 import { FormulairePosition } from "./formulaire-position";
 import { CamembertAllocation } from "./camembert";
 import { SupprimerPositionBouton } from "./supprimer-position";
+import { IconeActif } from "@/lib/icones-actifs";
+import { GraphiqueHistoriqueMetal } from "./graphique-historique";
+import { METAUX_PHYSIQUES } from "@/lib/constants";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -73,6 +76,34 @@ export default async function PagePatrimoine() {
   const totalPerformance = totalValeur - totalApports;
 
   const donneesInsuffisantes = listeComptes.length === 0 || listeActifs.length === 0;
+
+  // Données du graphique historique des métaux : uniquement les métaux
+  // présents dans les réglages, pas seulement ceux déjà en position — pour
+  // pouvoir consulter le cours d'un métal avant même d'en posséder.
+  const metauxActifs = listeActifs.filter((a) => a.type === "metal");
+  const metauxGraphique = metauxActifs.map((a) => ({
+    actifId: a.id,
+    libelle: a.libelle,
+    symbole: a.identifiantExterne ?? "",
+    automatique: METAUX_PHYSIQUES.find((m) => m.symbole === a.identifiantExterne)?.sourcePrix === "metaux",
+  }));
+  const coursParActifMetal: Record<string, { date: string; prix: number }[]> = {};
+  for (const c of listeCours) {
+    if (!metauxActifs.some((a) => a.id === c.actifId)) continue;
+    (coursParActifMetal[c.actifId] ??= []).push({
+      date: c.horodatage.toISOString(),
+      prix: Number(c.prix),
+    });
+  }
+  const achatsParActifMetal: Record<string, { date: string; prix: number; note: string | null }[]> = {};
+  for (const l of lignes) {
+    if (l.actif?.type !== "metal" || !l.position.dateAcquisition) continue;
+    (achatsParActifMetal[l.actif.id] ??= []).push({
+      date: l.position.dateAcquisition,
+      prix: l.prixRevientMoyen,
+      note: l.position.note,
+    });
+  }
 
   // Regroupement par famille (type d'actif) — l'ordre suit TYPES_ACTIF,
   // seules les familles ayant au moins une position sont affichées.
@@ -172,11 +203,24 @@ export default async function PagePatrimoine() {
                       <span className="text-muted transition-transform group-open:rotate-180">▾</span>
                     </span>
                   </summary>
+                  {groupe.type === "metal" && metauxGraphique.length > 0 && (
+                    <GraphiqueHistoriqueMetal
+                      metaux={metauxGraphique}
+                      coursParActif={coursParActifMetal}
+                      achatsParActif={achatsParActifMetal}
+                    />
+                  )}
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => (
                       <li key={l.position.id} className="relative py-3 pr-6">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-medium text-foreground">{l.actif?.libelle ?? "—"}</p>
+                          <p className="flex items-center gap-2 font-medium text-foreground">
+                            <IconeActif
+                              type={l.actif?.type}
+                              identifiantExterne={l.actif?.identifiantExterne}
+                            />
+                            {l.actif?.libelle ?? "—"}
+                          </p>
                           {l.calcul ? (
                             <p className="font-medium text-foreground">
                               {formatEurPrecis(l.calcul.valeurActuelle)}

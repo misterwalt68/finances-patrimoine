@@ -7,6 +7,7 @@ import { actifs, comptes, cours, institutions, parametres, positions } from "@/d
 import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
 import { rechercherSurCoinGecko } from "@/lib/pricing/adaptateurs/coingecko";
 import { obtenirAdaptateur } from "@/lib/pricing/registre";
+import { obtenirHistoriqueOr } from "@/lib/pricing/adaptateurs/metaux";
 import { obtenirSoldesCoinbase } from "@/lib/coinbase/client";
 import { METAUX_PHYSIQUES } from "@/lib/constants";
 
@@ -88,6 +89,50 @@ export async function creerPosition(formData: FormData) {
 export async function supprimerPosition(id: string) {
   await db.delete(positions).where(eq(positions.id, id));
   revalidatePath("/patrimoine");
+}
+
+export type EtatHistoriqueOr =
+  | { statut: "repos" }
+  | { statut: "ok"; nombre: number }
+  | { statut: "erreur"; message: string };
+
+/**
+ * Charge les 30 derniers jours de cours de l'or dans `cours`, pour le
+ * graphique historique — limite du palier gratuit de l'API (SPEC.md §5.2 :
+ * "l'app affiche toujours la date du dernier cours connu"). Ré-exécutable
+ * sans dupliquer : les points déjà enregistrés pour cette période sont
+ * remplacés, pas cumulés.
+ */
+export async function chargerHistoriqueOr(): Promise<EtatHistoriqueOr> {
+  try {
+    const [or] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, "XAU"));
+    if (!or) return { statut: "erreur", message: 'Actif "Or" introuvable.' };
+
+    const depuis = new Date();
+    depuis.setDate(depuis.getDate() - 30);
+
+    const points = await obtenirHistoriqueOr(depuis);
+
+    await db
+      .delete(cours)
+      .where(and(eq(cours.actifId, or.id), eq(cours.source, "metaux_historique")));
+
+    if (points.length > 0) {
+      await db.insert(cours).values(
+        points.map((p) => ({
+          actifId: or.id,
+          horodatage: p.date,
+          prix: String(p.prix),
+          source: "metaux_historique",
+        })),
+      );
+    }
+
+    revalidatePath("/patrimoine");
+    return { statut: "ok", nombre: points.length };
+  } catch (e) {
+    return { statut: "erreur", message: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
 }
 
 /** Rafraîchit le cours de tous les actifs ayant une source automatique. */
