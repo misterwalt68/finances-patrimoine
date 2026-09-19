@@ -2,12 +2,13 @@ import Link from "next/link";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { positions, actifs, comptes, institutions, cours } from "@/db/schema";
-import { Champ, ChampSelect } from "@/components/ui/champ";
-import { Bouton } from "@/components/ui/bouton";
 import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
-import { creerPosition, actualiserCours } from "./actions";
+import { TYPES_ACTIF } from "@/lib/constants";
+import { actualiserCours } from "./actions";
 import { ApercuCoinbase } from "./apercu-coinbase";
+import { FormulairePosition } from "./formulaire-position";
+import { CamembertAllocation } from "./camembert";
 
 // En dessous de 10€, 0 décimale masquerait tout (0,16€ afficherait "0 €").
 const formatEur = (n: number) =>
@@ -29,7 +30,6 @@ export default async function PagePatrimoine() {
 
   const actifsParId = new Map(listeActifs.map((a) => [a.id, a]));
   const comptesParId = new Map(listeComptes.map((c) => [c.id, c]));
-  const institutionsParId = new Map(listeInstitutions.map((i) => [i.id, i]));
 
   const dernierCoursParActifId = new Map<string, (typeof listeCours)[number]>();
   for (const c of listeCours) {
@@ -60,6 +60,19 @@ export default async function PagePatrimoine() {
   const totalPerformance = totalValeur - totalApports;
 
   const donneesInsuffisantes = listeComptes.length === 0 || listeActifs.length === 0;
+
+  // Regroupement par famille (type d'actif) — l'ordre suit TYPES_ACTIF,
+  // seules les familles ayant au moins une position sont affichées.
+  const groupes = TYPES_ACTIF.map((t) => ({
+    type: t.value,
+    label: t.label,
+    lignes: lignes.filter((l) => l.actif?.type === t.value),
+  }))
+    .filter((g) => g.lignes.length > 0)
+    .map((g) => ({
+      ...g,
+      valeur: g.lignes.reduce((s, l) => s + (l.calcul?.valeurActuelle ?? 0), 0),
+    }));
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
@@ -98,6 +111,14 @@ export default async function PagePatrimoine() {
         </p>
       </Carte>
 
+      {groupes.length > 0 && (
+        <div className="mt-4">
+          <Carte>
+            <CamembertAllocation groupes={groupes} />
+          </Carte>
+        </div>
+      )}
+
       <div className="mt-6 space-y-6">
         <ApercuCoinbase />
 
@@ -110,89 +131,75 @@ export default async function PagePatrimoine() {
             .
           </ListeVide>
         ) : (
-          <Carte>
-            <form action={creerPosition} className="space-y-3">
-              <ChampSelect label="Compte" name="compteId" required defaultValue="">
-                <option value="" disabled>
-                  Choisir…
-                </option>
-                {listeComptes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
-                  </option>
-                ))}
-              </ChampSelect>
-              <ChampSelect label="Actif" name="actifId" required defaultValue="">
-                <option value="" disabled>
-                  Choisir…
-                </option>
-                {listeActifs.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.libelle}
-                  </option>
-                ))}
-              </ChampSelect>
-              <Champ
-                label="Quantité"
-                name="quantite"
-                type="number"
-                inputMode="decimal"
-                step="any"
-                required
-              />
-              <Champ
-                label="Prix de revient moyen (€, optionnel)"
-                name="prixRevientMoyen"
-                type="number"
-                inputMode="decimal"
-                step="any"
-              />
-              <Bouton type="submit" className="w-full">
-                Ajouter la position
-              </Bouton>
-            </form>
-          </Carte>
+          <FormulairePosition
+            listeActifs={listeActifs}
+            listeComptes={listeComptes}
+            listeInstitutions={listeInstitutions}
+          />
         )}
 
-        <div className="space-y-2">
-          <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
-            {lignes.length} position{lignes.length > 1 ? "s" : ""}
-          </h2>
-          {lignes.length === 0 ? (
+        <div className="space-y-3">
+          {groupes.length === 0 ? (
             <ListeVide>Aucune position pour l&apos;instant.</ListeVide>
           ) : (
-            <Carte>
-              <ul className="divide-y divide-line">
-                {lignes.map((l) => (
-                  <li key={l.position.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium text-foreground">{l.actif?.libelle ?? "—"}</p>
-                      {l.calcul ? (
-                        <p className="font-medium text-foreground">
-                          {formatEur(l.calcul.valeurActuelle)}
-                        </p>
-                      ) : (
-                        <Badge>Pas de cours</Badge>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
-                      <span>{l.compte?.libelle}</span>
-                      <span>· {l.quantite} unités</span>
-                      {l.position.provisoire && <Badge>Provisoire</Badge>}
-                    </div>
-                    {l.calcul && (
-                      <p className="mt-1 text-sm">
-                        <span className="text-muted">Apports {formatEur(l.calcul.apports)} · </span>
-                        <span className={l.calcul.performance >= 0 ? "text-positive" : "text-negative"}>
-                          {l.calcul.performance >= 0 ? "+" : ""}
-                          {formatEur(l.calcul.performance)}
-                        </span>
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Carte>
+            groupes.map((groupe) => {
+              return (
+                <details key={groupe.type} className="group rounded-2xl border border-line bg-surface open:pb-2" open>
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
+                    <span className="font-medium text-foreground">
+                      {groupe.label}
+                      <span className="ml-2 text-sm font-normal text-muted">
+                        {groupe.lignes.length}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">{formatEur(groupe.valeur)}</span>
+                      <span className="text-muted transition-transform group-open:rotate-180">▾</span>
+                    </span>
+                  </summary>
+                  <ul className="divide-y divide-line border-t border-line px-4">
+                    {groupe.lignes.map((l) => (
+                      <li key={l.position.id} className="py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium text-foreground">{l.actif?.libelle ?? "—"}</p>
+                          {l.calcul ? (
+                            <p className="font-medium text-foreground">
+                              {formatEur(l.calcul.valeurActuelle)}
+                            </p>
+                          ) : (
+                            <Badge>Pas de cours</Badge>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
+                          <span>{l.compte?.libelle}</span>
+                          <span>· {l.quantite} unités</span>
+                          {l.position.note && <Badge>{l.position.note}</Badge>}
+                          {l.position.dateAcquisition && (
+                            <Badge>
+                              {new Date(l.position.dateAcquisition).toLocaleDateString("fr-FR")}
+                            </Badge>
+                          )}
+                          {l.position.provisoire && <Badge>Provisoire</Badge>}
+                        </div>
+                        {l.calcul && (
+                          <p className="mt-1 text-sm">
+                            <span className="text-muted">
+                              Apports {formatEur(l.calcul.apports)} ·{" "}
+                            </span>
+                            <span
+                              className={l.calcul.performance >= 0 ? "text-positive" : "text-negative"}
+                            >
+                              {l.calcul.performance >= 0 ? "+" : ""}
+                              {formatEur(l.calcul.performance)}
+                            </span>
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })
           )}
         </div>
       </div>

@@ -14,6 +14,8 @@ export async function creerPosition(formData: FormData) {
   const actifId = String(formData.get("actifId") ?? "").trim();
   const quantite = String(formData.get("quantite") ?? "").trim();
   const prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
   if (!compteId || !actifId || !quantite) return;
 
   await db.insert(positions).values({
@@ -21,6 +23,8 @@ export async function creerPosition(formData: FormData) {
     actifId,
     quantite,
     prixRevientMoyen: prixRevientMoyen || null,
+    note: note || null,
+    dateAcquisition: dateAcquisition || null,
   });
   revalidatePath("/patrimoine");
 }

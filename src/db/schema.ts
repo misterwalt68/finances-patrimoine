@@ -103,6 +103,14 @@ export const positions = pgTable("positions", {
   // La quantité est la vérité ; la valeur est toujours calculée, jamais stockée (SPEC §4).
   quantite: numeric("quantite", { precision: 24, scale: 8 }).notNull(),
   prixRevientMoyen: numeric("prix_revient_moyen", { precision: 14, scale: 4 }),
+  // Description libre (ex. "Lingotin 50g", "Pièce Napoléon") — utile pour
+  // distinguer plusieurs positions du même actif sur le même compte (or
+  // physique notamment, où chaque pièce/lingot est un achat séparé).
+  note: text("note"),
+  // Approximation simple de la date d'achat pour suivre l'évolution dans le
+  // temps sans devoir saisir un mouvement complet (utile pour l'or physique,
+  // où il n'y a rien de numérique pour capter automatiquement la date).
+  dateAcquisition: date("date_acquisition"),
   provisoire: boolean("provisoire").notNull().default(false),
   updatedAt: updatedAt(),
 });

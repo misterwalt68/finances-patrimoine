@@ -1,5 +1,6 @@
 import type { AdaptateurPrix } from "./types";
 import { coingecko } from "./adaptateurs/coingecko";
+import { metaux } from "./adaptateurs/metaux";
 
 /**
  * Registre d'adaptateurs — SPEC.md §2 : ajouter un actif n'exige jamais de
@@ -9,6 +10,7 @@ import { coingecko } from "./adaptateurs/coingecko";
  */
 const registre: Record<string, AdaptateurPrix> = {
   coingecko,
+  metaux,
 };
 
 export function obtenirAdaptateur(sourcePrix: string): AdaptateurPrix | null {
