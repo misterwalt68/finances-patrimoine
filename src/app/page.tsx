@@ -118,8 +118,14 @@ export default async function PageAccueil() {
       </div>
 
       <Link
-        href="/reglages"
+        href="/patrimoine"
         className="mt-6 flex h-11 items-center justify-center rounded-lg bg-accent text-base font-medium text-accent-foreground transition-opacity active:opacity-80"
+      >
+        Voir le patrimoine
+      </Link>
+      <Link
+        href="/reglages"
+        className="mt-3 flex h-11 items-center justify-center rounded-lg border border-line text-base font-medium text-foreground transition-colors hover:border-muted"
       >
         Aller aux réglages
       </Link>
