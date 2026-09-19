@@ -10,12 +10,20 @@ import { ApercuCoinbase } from "./apercu-coinbase";
 import { FormulairePosition } from "./formulaire-position";
 import { CamembertAllocation } from "./camembert";
 
-// En dessous de 10€, 0 décimale masquerait tout (0,16€ afficherait "0 €").
-const formatEur = (n: number) =>
+// Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
+// total par famille) : plus lisible en un coup d'œil.
+const formatEurArrondi = (n: number) =>
+  n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+// Précis (toujours 2 décimales) — pour chaque ligne de détail (valeur,
+// apports, performance d'une position) : jamais d'arrondi qui cache l'écart
+// réel, à la demande de Maxime.
+const formatEurPrecis = (n: number) =>
   n.toLocaleString("fr-FR", {
     style: "currency",
     currency: "EUR",
-    maximumFractionDigits: Math.abs(n) < 10 ? 2 : 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 
 // Précise l'unité entre parenthèses pour les familles où "unités" seul est
@@ -102,15 +110,15 @@ export default async function PagePatrimoine() {
       <Carte accent>
         <p className="text-sm text-muted">Valeur totale</p>
         <p className="mt-1 text-4xl font-semibold tracking-tight text-foreground">
-          {formatEur(totalValeur)}
+          {formatEurArrondi(totalValeur)}
         </p>
         <p className="mt-3 text-sm">
           <span className="text-muted">Apports </span>
-          <span className="text-foreground">{formatEur(totalApports)}</span>
+          <span className="text-foreground">{formatEurArrondi(totalApports)}</span>
           <span className="text-muted"> · Performance </span>
           <span className={totalPerformance >= 0 ? "text-positive" : "text-negative"}>
             {totalPerformance >= 0 ? "+" : ""}
-            {formatEur(totalPerformance)}
+            {formatEurArrondi(totalPerformance)}
           </span>
         </p>
       </Carte>
@@ -157,7 +165,9 @@ export default async function PagePatrimoine() {
                       </span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="font-medium text-foreground">{formatEur(groupe.valeur)}</span>
+                      <span className="font-medium text-foreground">
+                        {formatEurArrondi(groupe.valeur)}
+                      </span>
                       <span className="text-muted transition-transform group-open:rotate-180">▾</span>
                     </span>
                   </summary>
@@ -168,7 +178,7 @@ export default async function PagePatrimoine() {
                           <p className="font-medium text-foreground">{l.actif?.libelle ?? "—"}</p>
                           {l.calcul ? (
                             <p className="font-medium text-foreground">
-                              {formatEur(l.calcul.valeurActuelle)}
+                              {formatEurPrecis(l.calcul.valeurActuelle)}
                             </p>
                           ) : (
                             <Badge>Pas de cours</Badge>
@@ -190,13 +200,13 @@ export default async function PagePatrimoine() {
                         {l.calcul && (
                           <p className="mt-1 text-sm">
                             <span className="text-muted">
-                              Apports {formatEur(l.calcul.apports)} ·{" "}
+                              Apports {formatEurPrecis(l.calcul.apports)} ·{" "}
                             </span>
                             <span
                               className={l.calcul.performance >= 0 ? "text-positive" : "text-negative"}
                             >
                               {l.calcul.performance >= 0 ? "+" : ""}
-                              {formatEur(l.calcul.performance)}
+                              {formatEurPrecis(l.calcul.performance)}
                             </span>
                           </p>
                         )}
