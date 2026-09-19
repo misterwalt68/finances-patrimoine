@@ -272,9 +272,11 @@ async function synchroniserTransactionsBancaires(): Promise<void> {
  * sans jamais avoir besoin d'accéder au Livret A lui-même.
  *
  * Chaque virement n'est appliqué qu'une fois (passage à `statut: "categorise"`,
- * avec une note explicite) — jamais recompté à la synchro suivante. Le
- * nouveau solde est ajouté comme une ligne d'historique dans `cours` (jamais
- * un écrasement), pour garder une trace datée de chaque ajustement.
+ * avec une note explicite) — jamais recompté à la synchro suivante. Un point
+ * d'historique est ajouté à `cours` à CHAQUE actualisation, même sans
+ * virement détecté (solde inchangé) : comme pour les comptes DSP2, c'est ce
+ * qui permet à la courbe d'évolution de se construire au fil du temps plutôt
+ * que de rester vide entre deux mouvements réels.
  */
 async function ajusterSoldeLivretA(): Promise<void> {
   const [compteCourant] = await db
@@ -302,11 +304,10 @@ async function ajusterSoldeLivretA(): Promise<void> {
         ilike(transactions.commercant, "%livret a%"),
       ),
     );
-  if (mouvements.length === 0) return;
 
   // Un débit du compte courant (montant < 0) part vers le Livret A (+) ;
   // un crédit (montant > 0) en revient (-) — signe inversé par rapport au
-  // compte courant.
+  // compte courant. Vaut 0 si aucun virement détecté depuis la dernière fois.
   const ajustement = mouvements.reduce((somme, m) => somme - Number(m.montant), 0);
 
   const [dernierCours] = await db
@@ -322,7 +323,7 @@ async function ajusterSoldeLivretA(): Promise<void> {
     actifId: positionLivretA.actifId,
     horodatage: new Date(),
     prix: String(nouveauSolde),
-    source: "estimation_virements",
+    source: mouvements.length > 0 ? "estimation_virements" : "estimation_stable",
   });
   // Même sémantique que les autres comptes cash : le prix de revient suit
   // toujours le solde estimé, pour ne jamais afficher de faux gain/perte.
@@ -331,15 +332,17 @@ async function ajusterSoldeLivretA(): Promise<void> {
     .set({ prixRevientMoyen: String(nouveauSolde) })
     .where(eq(positions.id, positionLivretA.id));
 
-  await db
-    .update(transactions)
-    .set({ statut: "categorise", note: "Virement interne vers/depuis le Livret A — pris en compte automatiquement" })
-    .where(
-      inArray(
-        transactions.id,
-        mouvements.map((m) => m.id),
-      ),
-    );
+  if (mouvements.length > 0) {
+    await db
+      .update(transactions)
+      .set({ statut: "categorise", note: "Virement interne vers/depuis le Livret A — pris en compte automatiquement" })
+      .where(
+        inArray(
+          transactions.id,
+          mouvements.map((m) => m.id),
+        ),
+      );
+  }
 }
 
 /**

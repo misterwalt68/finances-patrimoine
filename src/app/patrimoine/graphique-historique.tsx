@@ -254,7 +254,7 @@ function GraphiqueHistorique({
 
   return (
     <div className="border-b border-line px-4 py-4">
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {series.map((s) => (
           <button
             key={s.id}
@@ -262,8 +262,8 @@ function GraphiqueHistorique({
             onClick={() => setSerieId(s.id)}
             className={
               s.id === serieId
-                ? "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-accent-foreground"
-                : "flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs text-muted"
+                ? "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-accent-foreground"
+                : "flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs text-muted"
             }
             style={s.id === serieId ? { backgroundColor: s.couleur } : undefined}
           >
