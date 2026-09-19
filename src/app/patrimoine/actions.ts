@@ -81,6 +81,15 @@ export async function creerPosition(formData: FormData) {
   revalidatePath("/patrimoine");
 }
 
+/**
+ * Suppression manuelle d'une position (ex. un métal vendu dans la vraie
+ * vie) — la confirmation par saisie de texte se fait côté client, pas ici.
+ */
+export async function supprimerPosition(id: string) {
+  await db.delete(positions).where(eq(positions.id, id));
+  revalidatePath("/patrimoine");
+}
+
 /** Rafraîchit le cours de tous les actifs ayant une source automatique. */
 export async function actualiserCours() {
   const liste = await db.select().from(actifs);

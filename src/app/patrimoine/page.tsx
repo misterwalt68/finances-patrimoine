@@ -9,6 +9,7 @@ import { actualiserCours } from "./actions";
 import { ApercuCoinbase } from "./apercu-coinbase";
 import { FormulairePosition } from "./formulaire-position";
 import { CamembertAllocation } from "./camembert";
+import { SupprimerPositionBouton } from "./supprimer-position";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -173,7 +174,7 @@ export default async function PagePatrimoine() {
                   </summary>
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => (
-                      <li key={l.position.id} className="py-3">
+                      <li key={l.position.id} className="relative py-3 pr-6">
                         <div className="flex items-center justify-between gap-3">
                           <p className="font-medium text-foreground">{l.actif?.libelle ?? "—"}</p>
                           {l.calcul ? (
@@ -210,6 +211,12 @@ export default async function PagePatrimoine() {
                             </span>
                           </p>
                         )}
+                        <div className="absolute bottom-2 right-0">
+                          <SupprimerPositionBouton
+                            id={l.position.id}
+                            libelle={l.actif?.libelle ?? "cette position"}
+                          />
+                        </div>
                       </li>
                     ))}
                   </ul>
