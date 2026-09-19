@@ -6,7 +6,7 @@ import { institutions } from "@/db/schema";
 import { Carte, Badge } from "@/components/ui/carte";
 import { MarkdownSimple } from "@/lib/markdown-simple";
 import { CONNEXIONS_CONNUES, statutConnexion } from "@/lib/connexions";
-import { connecterBanque } from "./actions";
+import { connecterBanque, ASPSP_PAR_BANQUE } from "./actions";
 import { EB_SANDBOX } from "@/lib/enable-banking/client";
 
 type CompteBancaireExterne = { uid: string; nom: string | null; iban: string | null; devise: string | null };
@@ -63,24 +63,25 @@ export default async function PageConnexions({
                 : "Redirige vers ta banque pour autoriser la lecture de tes comptes."}
             </p>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <form action={connecterBanque.bind(null, "boursobank")}>
-              <button
-                type="submit"
-                className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
-              >
-                BoursoBank{EB_SANDBOX ? " (test)" : ""}
-              </button>
-            </form>
-            <form action={connecterBanque.bind(null, "trade_republic")}>
-              <button
-                type="submit"
-                className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
-              >
-                Trade Republic{EB_SANDBOX ? " (test)" : ""}
-              </button>
-            </form>
-          </div>
+          <form action={connecterBanque} className="flex shrink-0 gap-2">
+            <select
+              name="banque"
+              defaultValue="boursobank"
+              className="h-10 rounded-lg border border-line bg-surface px-3 text-sm text-foreground"
+            >
+              {Object.entries(ASPSP_PAR_BANQUE).map(([cle, def]) => (
+                <option key={cle} value={cle}>
+                  {def.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
+            >
+              Connecter{EB_SANDBOX ? " (test)" : ""}
+            </button>
+          </form>
         </div>
 
         {banquesConnectees.length > 0 && (
