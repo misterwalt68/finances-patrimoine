@@ -22,6 +22,13 @@
       "when": 1789796750619,
       "tag": "0002_cultured_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789826118364,
+      "tag": "0003_burly_butterfly",
+      "breakpoints": true
     }
   ]
 }

@@ -46,6 +46,15 @@ export const institutions = pgTable("institutions", {
   methodeConnexion: text("methode_connexion").notNull(), // psd2 | api | email | manuel
   consentementEtat: text("consentement_etat"), // actif | expire | revoque | absent
   consentementExpireLe: date("consentement_expire_le"),
+  // Identifiant de session Enable Banking (DSP2) — permet de relire les
+  // comptes/soldes/transactions sans repasser par le consentement tant
+  // qu'il est valide.
+  enableBankingSessionId: text("enable_banking_session_id"),
+  // Liste brute des comptes renvoyés par Enable Banking au moment du
+  // consentement (uid/nom/IBAN/devise) — Enable Banking ne redonne plus ces
+  // détails après coup (seulement les uid), donc conservés ici pour pouvoir
+  // les proposer au rattachement à un vrai `compte` depuis les réglages.
+  enableBankingComptes: jsonb("enable_banking_comptes"),
   createdAt: createdAt(),
 });
 
