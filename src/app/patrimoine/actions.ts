@@ -91,6 +91,36 @@ export async function creerPosition(formData: FormData) {
 }
 
 /**
+ * Modification manuelle d'une position existante. Quantité et prix de
+ * revient sont absents du formulaire pour un actif "cash" (gérés
+ * automatiquement, cf. rafraichirCoursActif) — `FormData.has` distingue
+ * "champ absent, ne pas toucher" de "champ vidé, remettre à null".
+ */
+export async function modifierPosition(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  const compteId = String(formData.get("compteId") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
+  if (!id || !compteId) return;
+
+  const valeurs: Partial<typeof positions.$inferInsert> = {
+    compteId,
+    note: note || null,
+    dateAcquisition: dateAcquisition || null,
+  };
+
+  if (formData.has("quantite")) {
+    valeurs.quantite = String(formData.get("quantite") ?? "").trim();
+  }
+  if (formData.has("prixRevientMoyen")) {
+    valeurs.prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim() || null;
+  }
+
+  await db.update(positions).set(valeurs).where(eq(positions.id, id));
+  revalidatePath("/patrimoine");
+}
+
+/**
  * Suppression manuelle d'une position (ex. un métal vendu dans la vraie
  * vie) — la confirmation par saisie de texte se fait côté client, pas ici.
  */

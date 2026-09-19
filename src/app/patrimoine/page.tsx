@@ -8,7 +8,7 @@ import { TYPES_ACTIF } from "@/lib/constants";
 import { actualiserCours } from "./actions";
 import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
-import { SupprimerPositionBouton } from "./supprimer-position";
+import { ModifierPositionBouton } from "./modifier-position";
 import { IconeActif } from "@/lib/icones-actifs";
 import { GraphiqueHistoriqueMetal } from "./graphique-historique";
 
@@ -299,9 +299,12 @@ export default async function PagePatrimoine() {
                           </p>
                         )}
                         <div className="absolute bottom-2 right-0">
-                          <SupprimerPositionBouton
-                            id={l.position.id}
-                            libelle={l.actif?.libelle ?? "cette position"}
+                          <ModifierPositionBouton
+                            position={l.position}
+                            actifLibelle={l.actif?.libelle ?? "cette position"}
+                            actifType={l.actif?.type}
+                            listeComptes={listeComptes}
+                            listeInstitutions={listeInstitutions}
                           />
                         </div>
                       </li>
