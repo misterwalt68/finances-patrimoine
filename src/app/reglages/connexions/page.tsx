@@ -59,18 +59,28 @@ export default async function PageConnexions({
             <p className="font-medium text-foreground">Connexion bancaire (DSP2)</p>
             <p className="mt-1 text-sm text-muted">
               {EB_SANDBOX
-                ? "Mode développement — connecte la banque de test, jamais BoursoBank."
+                ? "Mode développement — connecte la banque de test, jamais une vraie banque."
                 : "Redirige vers ta banque pour autoriser la lecture de tes comptes."}
             </p>
           </div>
-          <form action={connecterBanque}>
-            <button
-              type="submit"
-              className="h-10 shrink-0 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
-            >
-              Connecter{EB_SANDBOX ? " (test)" : ""}
-            </button>
-          </form>
+          <div className="flex shrink-0 gap-2">
+            <form action={connecterBanque.bind(null, "boursobank")}>
+              <button
+                type="submit"
+                className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
+              >
+                BoursoBank{EB_SANDBOX ? " (test)" : ""}
+              </button>
+            </form>
+            <form action={connecterBanque.bind(null, "trade_republic")}>
+              <button
+                type="submit"
+                className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
+              >
+                Trade Republic{EB_SANDBOX ? " (test)" : ""}
+              </button>
+            </form>
+          </div>
         </div>
 
         {banquesConnectees.length > 0 && (
