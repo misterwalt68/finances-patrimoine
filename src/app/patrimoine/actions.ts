@@ -7,18 +7,36 @@ import { actifs, comptes, cours, institutions, parametres, positions } from "@/d
 import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
 import { rechercherSurCoinGecko } from "@/lib/pricing/adaptateurs/coingecko";
 import { obtenirAdaptateur } from "@/lib/pricing/registre";
-import { obtenirHistoriqueOr } from "@/lib/pricing/adaptateurs/metaux";
+import { obtenirHistoriqueMetal } from "@/lib/pricing/adaptateurs/metaux";
 import { obtenirSoldesCoinbase, obtenirTransactionsCoinbase } from "@/lib/coinbase/client";
 import { calculerCoutBaseMoyen } from "@/lib/coinbase/cout-base";
 import { METAUX_PHYSIQUES } from "@/lib/constants";
 
-/** Trouve l'actif d'un métal (symbole fixe, cf. constants.ts) ou le crée. */
+/**
+ * Trouve l'actif d'un métal (symbole fixe, cf. constants.ts) ou le crée.
+ * Corrige au passage un actif créé avant qu'une source de prix gratuite
+ * existe pour ce métal (ex. argent/platine/palladium/cuivre, longtemps en
+ * cours manuel faute d'alternative à goldprice.dev) — sans ça, changer la
+ * constante ne suffirait pas à faire repartir le prix automatique d'un actif
+ * déjà en base.
+ */
 async function trouverOuCreerActifMetal(symbole: string) {
-  const [existant] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, symbole));
-  if (existant) return existant;
-
   const metal = METAUX_PHYSIQUES.find((m) => m.symbole === symbole);
   if (!metal) throw new Error(`Métal inconnu : ${symbole}`);
+  const identifiantSourceAttendu = metal.sourcePrix === "metaux" ? metal.symbole : null;
+
+  const [existant] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, symbole));
+  if (existant) {
+    if (existant.sourcePrix !== metal.sourcePrix || existant.identifiantSource !== identifiantSourceAttendu) {
+      const [corrige] = await db
+        .update(actifs)
+        .set({ sourcePrix: metal.sourcePrix, identifiantSource: identifiantSourceAttendu })
+        .where(eq(actifs.id, existant.id))
+        .returning();
+      return corrige;
+    }
+    return existant;
+  }
 
   const [cree] = await db
     .insert(actifs)
@@ -27,7 +45,7 @@ async function trouverOuCreerActifMetal(symbole: string) {
       type: "metal",
       identifiantExterne: metal.symbole,
       sourcePrix: metal.sourcePrix,
-      identifiantSource: metal.sourcePrix === "metaux" ? metal.symbole : null,
+      identifiantSource: identifiantSourceAttendu,
       devise: "EUR",
     })
     .returning();
@@ -68,18 +86,6 @@ export async function creerPosition(formData: FormData) {
     dateAcquisition: dateAcquisition || null,
   });
 
-  // Un métal en cours manuel n'a pas d'adaptateur : le prix d'achat saisi
-  // sert de première valeur connue, sinon la position resterait sans cours.
-  const metal = METAUX_PHYSIQUES.find((m) => m.symbole === metalSymbole);
-  if (metal?.sourcePrix === "manuel" && prixRevientMoyen) {
-    await db.insert(cours).values({
-      actifId,
-      horodatage: new Date(),
-      prix: prixRevientMoyen,
-      source: "manuel",
-    });
-  }
-
   revalidatePath("/patrimoine");
 }
 
@@ -93,45 +99,71 @@ export async function supprimerPosition(id: string) {
 }
 
 /**
- * Recharge l'historique complet (25+ ans, Yahoo Finance) de l'or dans `cours`,
- * pour le graphique historique — appelé à chaque "Actualiser les cours", plus
- * besoin d'un bouton dédié maintenant que l'historique se charge en entier
- * d'un coup. Ré-exécutable sans dupliquer : les points déjà enregistrés comme
- * historique sont remplacés, pas cumulés.
+ * Corrige les actifs métaux déjà en base dont la source de prix ne
+ * correspond plus à `METAUX_PHYSIQUES` — ex. argent/platine/palladium/cuivre,
+ * créés en cours manuel avant qu'une source gratuite existe pour eux. Sans
+ * ça, un actif déjà créé resterait bloqué sur son ancienne source même après
+ * avoir changé la constante, puisqu'elle n'est lue qu'à la création.
  */
-async function chargerHistoriqueOr(): Promise<void> {
-  const [or] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, "XAU"));
-  if (!or) return;
-
-  const points = await obtenirHistoriqueOr();
-
-  await db.delete(cours).where(and(eq(cours.actifId, or.id), eq(cours.source, "metaux_historique")));
-
-  if (points.length > 0) {
-    await db.insert(cours).values(
-      points.map((p) => ({
-        actifId: or.id,
-        horodatage: p.date,
-        prix: String(p.prix),
-        source: "metaux_historique",
-      })),
-    );
+async function synchroniserSourcesMetaux(): Promise<void> {
+  for (const metal of METAUX_PHYSIQUES) {
+    const identifiantSourceAttendu = metal.sourcePrix === "metaux" ? metal.symbole : null;
+    await db
+      .update(actifs)
+      .set({ sourcePrix: metal.sourcePrix, identifiantSource: identifiantSourceAttendu })
+      .where(eq(actifs.identifiantExterne, metal.symbole));
   }
+}
+
+/**
+ * Recharge l'historique complet (25 ans, Yahoo Finance) de chaque métal à
+ * source automatique dans `cours`, pour le graphique historique — appelé à
+ * chaque "Actualiser les cours", plus besoin d'un bouton dédié maintenant que
+ * l'historique se charge en entier d'un coup. Ré-exécutable sans dupliquer :
+ * les points déjà enregistrés comme historique sont remplacés, pas cumulés.
+ */
+async function chargerHistoriqueMetaux(): Promise<void> {
+  const metauxAutomatiques = METAUX_PHYSIQUES.filter((m) => m.sourcePrix === "metaux");
+
+  await Promise.allSettled(
+    metauxAutomatiques.map(async (metal) => {
+      const [actif] = await db.select().from(actifs).where(eq(actifs.identifiantExterne, metal.symbole));
+      if (!actif) return;
+
+      const points = await obtenirHistoriqueMetal(metal.symbole);
+
+      await db
+        .delete(cours)
+        .where(and(eq(cours.actifId, actif.id), eq(cours.source, "metaux_historique")));
+
+      if (points.length > 0) {
+        await db.insert(cours).values(
+          points.map((p) => ({
+            actifId: actif.id,
+            horodatage: p.date,
+            prix: String(p.prix),
+            source: "metaux_historique",
+          })),
+        );
+      }
+    }),
+  );
 }
 
 /**
  * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
  * retire des positions), rafraîchit le cours de tous les actifs ayant une
- * source automatique, et ré-enregistre l'historique complet de l'or. Fusionné
- * à la demande de Maxime — avoir un encart Coinbase séparé ou un bouton
- * "Charger l'historique" séparé n'apportait rien de plus qu'un bouton "tout
- * actualiser" unique.
+ * source automatique, et ré-enregistre l'historique complet des métaux.
+ * Fusionné à la demande de Maxime — avoir un encart Coinbase séparé ou un
+ * bouton "Charger l'historique" séparé n'apportait rien de plus qu'un bouton
+ * "tout actualiser" unique.
  */
 export async function actualiserCours() {
+  await synchroniserSourcesMetaux();
   await synchroniserCoinbase().catch(() => null);
   const liste = await db.select().from(actifs);
   await Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id)));
-  await chargerHistoriqueOr().catch(() => null);
+  await chargerHistoriqueMetaux().catch(() => null);
   revalidatePath("/patrimoine");
 }
 
@@ -233,8 +265,30 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
         prix = null;
       }
 
-      const valeurEstimee = prix !== null ? prix * solde.quantite : null;
-      if (valeurEstimee !== null && valeurEstimee < seuil) {
+      if (prix === null) {
+        // Prix indisponible (CoinGecko en panne ou limité) : jamais deviné,
+        // donc jamais classé sous le seuil de poussière avec confiance. Une
+        // position déjà connue est laissée intacte — marquée "présente" pour
+        // ne pas être supprimée par le nettoyage plus bas — plutôt que
+        // risquée d'être effacée par un simple aléa d'API ; un solde jamais
+        // vu n'est en revanche pas créé sans savoir s'il vaut la peine de
+        // l'afficher.
+        if (actifExistant) {
+          const [positionExistante] = await db
+            .select({ id: positions.id })
+            .from(positions)
+            .where(and(eq(positions.compteId, compteCible.id), eq(positions.actifId, actifExistant.id)));
+          if (positionExistante) {
+            if (!presentsParCompte.has(compteCible.id)) presentsParCompte.set(compteCible.id, new Set());
+            presentsParCompte.get(compteCible.id)!.add(actifExistant.id);
+          }
+        }
+        ignores.push(solde.devise);
+        continue;
+      }
+
+      const valeurEstimee = prix * solde.quantite;
+      if (valeurEstimee < seuil) {
         sousLeSeuil.push(solde.devise);
         continue;
       }
@@ -296,14 +350,12 @@ export async function synchroniserCoinbase(): Promise<EtatSyncCoinbase> {
         });
       }
 
-      if (prix !== null) {
-        await db.insert(cours).values({
-          actifId: actif.id,
-          horodatage: new Date(),
-          prix: String(prix),
-          source: "coingecko",
-        });
-      }
+      await db.insert(cours).values({
+        actifId: actif.id,
+        horodatage: new Date(),
+        prix: String(prix),
+        source: "coingecko",
+      });
 
       nombre += 1;
     }

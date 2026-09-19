@@ -42,14 +42,16 @@ export const SOURCES_PRIX = [
 
 /**
  * Les 5 métaux précieux/physiques que les particuliers détiennent en
- * général. Seul l'or a une source de prix gratuite sans clé (goldprice.dev,
- * cf. CONNEXIONS.md) — les autres sont en cours manuel jusqu'à ce qu'une
- * source gratuite équivalente existe ou qu'un compte payant soit créé.
+ * général. Tous ont désormais une source de prix gratuite sans clé — l'or
+ * via goldprice.dev (cours au comptant réel), les autres via les contrats à
+ * terme Yahoo Finance (cf. src/lib/pricing/adaptateurs/metaux.ts) : ce
+ * dernier n'existait pas au tout début du projet, goldprice.dev réservant
+ * argent/platine/palladium/cuivre à son palier payant (vérifié en direct).
  */
 export const METAUX_PHYSIQUES = [
   { symbole: "XAU", libelle: "Or", sourcePrix: "metaux" },
-  { symbole: "XAG", libelle: "Argent", sourcePrix: "manuel" },
-  { symbole: "XPT", libelle: "Platine", sourcePrix: "manuel" },
-  { symbole: "XPD", libelle: "Palladium", sourcePrix: "manuel" },
-  { symbole: "XCU", libelle: "Cuivre", sourcePrix: "manuel" },
+  { symbole: "XAG", libelle: "Argent", sourcePrix: "metaux" },
+  { symbole: "XPT", libelle: "Platine", sourcePrix: "metaux" },
+  { symbole: "XPD", libelle: "Palladium", sourcePrix: "metaux" },
+  { symbole: "XCU", libelle: "Cuivre", sourcePrix: "metaux" },
 ] as const;

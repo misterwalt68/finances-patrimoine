@@ -91,7 +91,7 @@ export function FormulairePosition({
               onChange={setMetalSymbole}
               options={METAUX_PHYSIQUES.map((m) => ({
                 value: m.symbole,
-                label: m.libelle + (m.sourcePrix === "manuel" ? " (cours manuel)" : ""),
+                label: m.libelle,
                 icone: <IconeMetal symbole={m.symbole} />,
               }))}
             />

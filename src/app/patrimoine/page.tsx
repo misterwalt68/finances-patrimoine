@@ -11,7 +11,6 @@ import { CamembertAllocation } from "./camembert";
 import { SupprimerPositionBouton } from "./supprimer-position";
 import { IconeActif } from "@/lib/icones-actifs";
 import { GraphiqueHistoriqueMetal } from "./graphique-historique";
-import { METAUX_PHYSIQUES } from "@/lib/constants";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -95,24 +94,29 @@ export default async function PagePatrimoine() {
       actifId: a.id,
       libelle: a.libelle,
       symbole: a.identifiantExterne ?? "",
-      automatique: METAUX_PHYSIQUES.find((m) => m.symbole === a.identifiantExterne)?.sourcePrix === "metaux",
       valeurPossedee: valeurPossedeeParActif.get(a.id) ?? 0,
     }))
     .sort((a, b) => b.valeurPossedee - a.valeurPossedee);
+  // Le graphique ne trace que des cours vérifiés par une vraie source de
+  // marché ("metaux_historique"/"metaux") — un cours "manuel" resté en base
+  // (ex. un ancien métal qui n'avait pas encore de prix automatique) peut
+  // être une saisie ponctuelle sans rapport avec le marché, qui fausserait
+  // toute l'échelle du graphique si elle s'y glissait.
   const coursParActifMetal: Record<string, { date: string; prix: number }[]> = {};
   for (const c of listeCours) {
-    if (!metauxActifs.some((a) => a.id === c.actifId)) continue;
+    if (!metauxActifs.some((a) => a.id === c.actifId) || c.source === "manuel") continue;
     (coursParActifMetal[c.actifId] ??= []).push({
       date: c.horodatage.toISOString(),
       prix: Number(c.prix),
     });
   }
-  const achatsParActifMetal: Record<string, { date: string; prix: number; note: string | null }[]> = {};
+  const achatsParActifMetal: Record<string, { date: string; prix: number; poids: number; note: string | null }[]> = {};
   for (const l of lignes) {
     if (l.actif?.type !== "metal" || !l.position.dateAcquisition) continue;
     (achatsParActifMetal[l.actif.id] ??= []).push({
       date: l.position.dateAcquisition,
       prix: l.prixRevientMoyen,
+      poids: l.quantite,
       note: l.position.note,
     });
   }

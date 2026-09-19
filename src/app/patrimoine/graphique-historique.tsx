@@ -4,8 +4,8 @@ import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } fro
 import { IconeMetal, couleurMetal } from "@/lib/icones-actifs";
 
 export type PointCours = { date: string; prix: number };
-export type MetalGraphique = { actifId: string; libelle: string; symbole: string; automatique: boolean };
-export type AchatMetal = { date: string; prix: number; note: string | null };
+export type MetalGraphique = { actifId: string; libelle: string; symbole: string };
+export type AchatMetal = { date: string; prix: number; poids: number; note: string | null };
 
 const PLAGES = [
   { valeur: "semaine", label: "1 semaine", jours: 7 },
@@ -356,7 +356,9 @@ export function GraphiqueHistoriqueMetal({
                 <p className="mt-1 inline-block rounded bg-background px-2 py-0.5 text-sm font-medium text-foreground">
                   {formatPrix(achatProche.prix)}
                 </p>
-                {achatProche.note && <p className="mt-1 text-[11px] text-muted">{achatProche.note}</p>}
+                <p className="mt-1 text-[11px] text-muted">
+                  {achatProche.poids} g{achatProche.note ? ` · ${achatProche.note}` : ""}
+                </p>
                 {performanceAchat !== null && (
                   <p className={`mt-1 text-[11px] ${performanceAchat >= 0 ? "text-positive" : "text-negative"}`}>
                     {performanceAchat >= 0 ? "▲" : "▼"} {Math.abs(performanceAchat).toFixed(1)}% depuis l&apos;achat
@@ -365,12 +367,6 @@ export function GraphiqueHistoriqueMetal({
               </div>
             )}
           </>
-        )}
-
-        {metal && !metal.automatique && (
-          <p className="mt-2 text-xs text-muted">
-            Cours manuel — pas d&apos;historique de marché, seulement les prix que tu as toi-même saisis.
-          </p>
         )}
       </div>
 
