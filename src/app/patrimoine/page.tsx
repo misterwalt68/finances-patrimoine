@@ -541,12 +541,13 @@ export default async function PagePatrimoine({
         </div>
       </div>
 
-      {!donneesInsuffisantes && (
+      {!donneesInsuffisantes && personneActive && (
         <div className="fixed bottom-6 right-5 z-40">
           <AjouterPosition
             listeActifs={listeActifs}
             listeComptes={comptesPourAjout}
             listeInstitutions={listeInstitutions}
+            personneActiveId={personneActive.id}
           />
         </div>
       )}

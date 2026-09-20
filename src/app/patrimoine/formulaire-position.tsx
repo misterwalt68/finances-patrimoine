@@ -21,11 +21,14 @@ export function FormulairePosition({
   listeActifs,
   listeComptes,
   listeInstitutions,
+  personneActiveId,
   onSuccess,
 }: {
   listeActifs: Actif[];
   listeComptes: Compte[];
   listeInstitutions: Institution[];
+  /** Personne actuellement affichée sur la page — à qui rattacher un métal (compte auto-créé, pas de sélection). */
+  personneActiveId: string;
   /** Appelé après un ajout réussi — permet au parent (ex. la modale) de se fermer. */
   onSuccess?: () => void;
 }) {
@@ -64,6 +67,7 @@ export function FormulairePosition({
   return (
     <Carte>
       <form action={lancer} className="space-y-3">
+        <input type="hidden" name="personneId" value={personneActiveId} />
         <ChampSelect
           label="Qu'est-ce que tu souhaites ajouter ?"
           value={famille}

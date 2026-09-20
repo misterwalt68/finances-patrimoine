@@ -54,29 +54,51 @@ async function trouverOuCreerActifMetal(symbole: string) {
 }
 
 /**
- * Compte physique unique pour les métaux — pas la peine de le redemander à
- * chaque ajout, il n'y en a qu'un. Décision de Maxime : la question du
- * compte n'a de sens que s'il y a un choix réel.
+ * Compte physique pour les métaux — un par personne (Maxime a le sien,
+ * Amélie le sien le jour où elle en achète), créé à la volée sur le modèle
+ * du premier, plutôt qu'un unique compte partagé qui aurait figé
+ * l'attribution à une seule personne. Toujours dans l'institution "Domicile"
+ * et l'enveloppe "Métaux physiques", pour rester cohérent avec l'existant.
  */
-async function obtenirCompteMetauxPhysiques() {
-  const [compte] = await db.select().from(comptes).where(eq(comptes.libelle, "Métaux physiques"));
-  if (!compte) throw new Error('Compte "Métaux physiques" introuvable — à créer dans les réglages.');
-  return compte;
+async function obtenirOuCreerCompteMetauxPhysiques(personneId: string) {
+  const [existant] = await db
+    .select()
+    .from(comptes)
+    .where(and(eq(comptes.libelle, "Métaux physiques"), eq(comptes.personneId, personneId)));
+  if (existant) return existant;
+
+  const [modele] = await db.select().from(comptes).where(eq(comptes.libelle, "Métaux physiques")).limit(1);
+  if (!modele) {
+    throw new Error('Aucun compte "Métaux physiques" existant à utiliser comme modèle — à créer une première fois dans les réglages.');
+  }
+  const [cree] = await db
+    .insert(comptes)
+    .values({
+      libelle: "Métaux physiques",
+      institutionId: modele.institutionId,
+      enveloppeId: modele.enveloppeId,
+      personneId,
+      devise: modele.devise,
+    })
+    .returning();
+  return cree;
 }
 
 export async function creerPosition(formData: FormData) {
   const metalSymbole = String(formData.get("metalSymbole") ?? "").trim();
   const actifIdBrut = String(formData.get("actifId") ?? "").trim();
   const compteIdBrut = String(formData.get("compteId") ?? "").trim();
+  const personneId = String(formData.get("personneId") ?? "").trim();
   const quantite = String(formData.get("quantite") ?? "").trim();
   const prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
   if (!quantite || (!actifIdBrut && !metalSymbole)) return;
   if (!metalSymbole && !compteIdBrut) return;
+  if (metalSymbole && !personneId) return;
 
   const actifId = metalSymbole ? (await trouverOuCreerActifMetal(metalSymbole)).id : actifIdBrut;
-  const compteId = metalSymbole ? (await obtenirCompteMetauxPhysiques()).id : compteIdBrut;
+  const compteId = metalSymbole ? (await obtenirOuCreerCompteMetauxPhysiques(personneId)).id : compteIdBrut;
 
   await db.insert(positions).values({
     compteId,

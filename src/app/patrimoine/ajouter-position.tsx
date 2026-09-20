@@ -16,10 +16,12 @@ export function AjouterPosition({
   listeActifs,
   listeComptes,
   listeInstitutions,
+  personneActiveId,
 }: {
   listeActifs: Actif[];
   listeComptes: Compte[];
   listeInstitutions: Institution[];
+  personneActiveId: string;
 }) {
   const [ouvert, setOuvert] = useState(false);
 
@@ -55,6 +57,7 @@ export function AjouterPosition({
               listeActifs={listeActifs}
               listeComptes={listeComptes}
               listeInstitutions={listeInstitutions}
+              personneActiveId={personneActiveId}
               onSuccess={() => setOuvert(false)}
             />
           </div>

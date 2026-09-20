@@ -7,6 +7,10 @@
 export const ASPSP_PAR_BANQUE = {
   boursobank: { label: "BoursoBank", nom: "Boursorama Banque", pays: "FR" },
   trade_republic: { label: "Trade Republic", nom: "Trade Republic", pays: "FR" },
+  // Nom générique "Crédit Mutuel" — le Crédit Mutuel est une fédération de
+  // caisses régionales autonomes (Bretagne, Sud-Ouest…) ; si l'authentification
+  // échoue, c'est probablement qu'il faut une variante régionale précise.
+  credit_mutuel: { label: "Crédit Mutuel", nom: "Crédit Mutuel", pays: "FR" },
 } satisfies Record<string, { label: string; nom: string; pays: string }>;
 
 export type CleBanque = keyof typeof ASPSP_PAR_BANQUE;
