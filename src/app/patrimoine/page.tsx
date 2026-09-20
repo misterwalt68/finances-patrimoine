@@ -39,27 +39,26 @@ const formatEurPrecis = (n: number) =>
 const uniteQuantite = (type: string | undefined) => (type === "metal" ? "unités (grammes)" : "unités");
 
 /**
- * Péremption d'un cours manuel (Livret A, Assurance-vie…) — un actif hors
- * DSP2 dérive silencieusement de la réalité si on ne le recale pas de temps
- * en temps. Escalade visuelle progressive plutôt qu'un simple oui/non, pour
- * qu'un léger retard (10j) se distingue d'un oubli prolongé (30j+) — jamais
- * mis à jour du tout est traité comme le pire des cas.
+ * Péremption d'un cours manuel (Livret A, Assurance-vie, PEA…) — un actif
+ * hors DSP2 dérive silencieusement de la réalité si on ne le recale pas de
+ * temps en temps. Dégradé continu (pas des paliers figés) du jaune pâle au
+ * rouge intense, dès le 5ᵉ jour — le but est d'inciter à corriger la valeur
+ * souvent, pour que l'historique enregistré reste pertinent. Jamais mis à
+ * jour du tout est traité comme le pire des cas (plafond).
  */
-type NiveauPeremption = "frais" | "jaune" | "orange" | "rouge";
-const SEUIL_JAUNE = 10;
-const SEUIL_ORANGE = 20;
-const SEUIL_ROUGE = 30;
-function niveauPeremption(joursDepuis: number | null): NiveauPeremption {
-  if (joursDepuis === null || joursDepuis >= SEUIL_ROUGE) return "rouge";
-  if (joursDepuis >= SEUIL_ORANGE) return "orange";
-  if (joursDepuis >= SEUIL_JAUNE) return "jaune";
-  return "frais";
+const PEREMPTION_SEUIL_DEBUT = 5;
+const PEREMPTION_SEUIL_MAX = 30;
+function stylePeremption(joursDepuis: number | null): { couleur: string; ombre: string } | null {
+  const jours = joursDepuis === null ? PEREMPTION_SEUIL_MAX : joursDepuis;
+  if (jours < PEREMPTION_SEUIL_DEBUT) return null;
+  const intensite = Math.min(1, (jours - PEREMPTION_SEUIL_DEBUT) / (PEREMPTION_SEUIL_MAX - PEREMPTION_SEUIL_DEBUT));
+  const teinte = Math.round(48 - intensite * 43); // 48° jaune → 5° rouge
+  const couleur = `hsl(${teinte}, 75%, 55%)`;
+  const flou = Math.round(4 + intensite * 16);
+  const etalement = Math.round(intensite * 3);
+  const opacite = (0.25 + intensite * 0.4).toFixed(2);
+  return { couleur, ombre: `0 0 ${flou}px ${etalement}px hsla(${teinte}, 75%, 55%, ${opacite})` };
 }
-const STYLE_PEREMPTION: Record<Exclude<NiveauPeremption, "frais">, { couleur: string; ombre: string }> = {
-  jaune: { couleur: "#e0c93e", ombre: "0 0 6px 0px rgba(224,201,62,0.35)" },
-  orange: { couleur: "var(--warning)", ombre: "0 0 10px 1px rgba(224,168,62,0.45)" },
-  rouge: { couleur: "var(--negative)", ombre: "0 0 18px 3px rgba(229,88,74,0.6)" },
-};
 
 export default async function PagePatrimoine() {
   const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours] =
@@ -246,8 +245,10 @@ export default async function PagePatrimoine() {
     });
 
   // Rappel "péremption" : tout actif à cours manuel (Livret A, Assurance-
-  // vie…) jamais mis à jour ou pas revu depuis le seuil orange (20 jours) —
-  // même seuil que l'encadrement visuel de chaque ligne, une seule vérité.
+  // vie, PEA…) jamais mis à jour ou pas revu depuis 20 jours — un seuil plus
+  // tardif que le début du dégradé visuel (5j), pour réserver cette bannière
+  // aux cas vraiment en retard plutôt que de la déclencher en permanence.
+  const PEREMPTION_SEUIL_BANNIERE = 20;
   const actifsAVerifier = lignes
     .filter((l) => l.joursDepuisMaj !== undefined)
     .map((l) => ({
@@ -255,7 +256,7 @@ export default async function PagePatrimoine() {
       libelle: `${l.actif!.libelle}${l.compte?.libelle ? ` (${l.compte.libelle})` : ""}`,
       joursDepuis: l.joursDepuisMaj as number | null,
     }))
-    .filter((a) => a.joursDepuis === null || a.joursDepuis >= SEUIL_ORANGE);
+    .filter((a) => a.joursDepuis === null || a.joursDepuis >= PEREMPTION_SEUIL_BANNIERE);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
@@ -365,16 +366,18 @@ export default async function PagePatrimoine() {
                         </span>
                         <span className="text-muted transition-transform group-open:rotate-180">▾</span>
                       </span>
-                      <span
-                        className={`text-xs ${groupe.performance >= 0 ? "text-positive" : "text-negative"}`}
-                      >
-                        {groupe.performance >= 0 ? "▲" : "▼"}
-                        {groupe.performancePct !== null && (
-                          <> {Math.abs(groupe.performancePct).toFixed(1)}% ·</>
-                        )}{" "}
-                        {groupe.performance >= 0 ? "+" : ""}
-                        {formatEurPrecis(groupe.performance)}
-                      </span>
+                      {groupe.type !== "cash" && groupe.type !== "securite" && (
+                        <span
+                          className={`text-xs ${groupe.performance >= 0 ? "text-positive" : "text-negative"}`}
+                        >
+                          {groupe.performance >= 0 ? "▲" : "▼"}
+                          {groupe.performancePct !== null && (
+                            <> {Math.abs(groupe.performancePct).toFixed(1)}% ·</>
+                          )}{" "}
+                          {groupe.performance >= 0 ? "+" : ""}
+                          {formatEurPrecis(groupe.performance)}
+                        </span>
+                      )}
                     </span>
                   </summary>
                   {groupe.type === "metal" && metauxGraphique.length > 0 && (
@@ -401,15 +404,14 @@ export default async function PagePatrimoine() {
                   )}
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => {
-                      const niveau = l.joursDepuisMaj !== undefined ? niveauPeremption(l.joursDepuisMaj) : "frais";
-                      const stylePeremption = niveau !== "frais" ? STYLE_PEREMPTION[niveau] : null;
+                      const peremption = l.joursDepuisMaj !== undefined ? stylePeremption(l.joursDepuisMaj) : null;
                       return (
                       <li
                         key={l.position.id}
-                        className={`relative py-3 pr-6 ${stylePeremption ? "-mx-2 rounded-lg border-l-4 px-3" : ""}`}
+                        className={`relative py-3 pr-6 ${peremption ? "-mx-2 rounded-lg border-l-4 px-3" : ""}`}
                         style={
-                          stylePeremption
-                            ? { borderLeftColor: stylePeremption.couleur, boxShadow: stylePeremption.ombre }
+                          peremption
+                            ? { borderLeftColor: peremption.couleur, boxShadow: peremption.ombre }
                             : undefined
                         }
                       >
@@ -458,8 +460,8 @@ export default async function PagePatrimoine() {
                             </span>
                           </p>
                         )}
-                        {stylePeremption && (
-                          <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: stylePeremption.couleur }}>
+                        {peremption && (
+                          <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: peremption.couleur }}>
                             <span aria-hidden>⚠</span>
                             {l.joursDepuisMaj === null
                               ? "Jamais mis à jour"
