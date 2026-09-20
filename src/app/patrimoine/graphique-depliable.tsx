@@ -16,7 +16,7 @@ export function GraphiqueDepliable({ children }: { children: ReactNode }) {
       <button
         type="button"
         onClick={() => setOuvert((v) => !v)}
-        className="flex w-full items-center justify-center gap-1.5 px-4 py-2.5 text-xs text-muted transition-colors hover:text-foreground"
+        className="flex w-full items-center justify-end gap-1.5 px-4 py-2.5 text-xs text-muted transition-colors hover:text-foreground"
       >
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M2 13.5V2.5" strokeLinecap="round" />
