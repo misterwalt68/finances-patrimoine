@@ -42,6 +42,16 @@ export const SOURCES_PRIX = [
   { value: "manuel", label: "Manuel" },
 ] as const;
 
+export const TYPES_CHARGE_REVENU = [
+  { value: "revenu", label: "Revenu" },
+  { value: "charge", label: "Charge" },
+] as const;
+
+export const PERIODICITES_CHARGE = [
+  { value: "mensuel", label: "Mensuel" },
+  { value: "annuel", label: "Annuel" },
+] as const;
+
 /**
  * Les 5 métaux précieux/physiques que les particuliers détiennent en
  * général. Tous ont désormais une source de prix gratuite sans clé — l'or

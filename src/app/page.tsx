@@ -57,6 +57,26 @@ export default async function PageAccueil() {
       </Link>
 
       <Link
+        href="/budget"
+        className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 transition-colors active:bg-background"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-accent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+            <rect x="3" y="6" width="18" height="13" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M7 15h4" />
+          </svg>
+        </span>
+        <span className="flex-1">
+          <span className="block font-medium text-foreground">Budget</span>
+          <span className="block text-sm text-muted">Revenus et charges fixes du foyer</span>
+        </span>
+        <span className="text-muted" aria-hidden>
+          ›
+        </span>
+      </Link>
+
+      <Link
         href="/reglages"
         className="mt-3 flex h-11 items-center justify-center rounded-lg border border-line text-base font-medium text-foreground transition-colors hover:border-muted"
       >

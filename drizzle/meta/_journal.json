@@ -50,6 +50,13 @@
       "when": 1789891623322,
       "tag": "0006_tired_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789903926192,
+      "tag": "0007_useful_wildside",
+      "breakpoints": true
     }
   ]
 }

@@ -188,6 +188,43 @@ export const plansInvestissement = pgTable("plans_investissement", {
   createdAt: createdAt(),
 });
 
+// --- Charges et revenus fixes (budget) -----------------------------------
+
+/**
+ * Registre déclaratif des revenus et charges récurrents connus à l'avance
+ * (salaire, loyer perçu, crédit, eau, électricité, abonnements…) — distinct
+ * du suivi précis des dépenses quotidiennes (`transactions`, branché en
+ * DSP2). Le montant n'est volontairement pas ici : voir
+ * `chargesRevenusHistorique`, pour suivre son évolution dans le temps (ex.
+ * la taxe foncière qui augmente chaque année) sans perdre les valeurs
+ * précédentes. Sert aussi de pense-bête pratique (fournisseur, numéro
+ * client, lien de suivi) — c'est la zone "pilotage", pas la zone "données".
+ */
+export const chargesRevenus = pgTable("charges_revenus", {
+  id: id(),
+  type: text("type").notNull(), // revenu | charge
+  libelle: text("libelle").notNull(),
+  periodicite: text("periodicite").notNull(), // mensuel | annuel
+  personneId: uuid("personne_id")
+    .notNull()
+    .references(() => personnes.id, { onDelete: "restrict" }),
+  fournisseur: text("fournisseur"),
+  numeroClient: text("numero_client"),
+  lienSuivi: text("lien_suivi"),
+  note: text("note"),
+  createdAt: createdAt(),
+});
+
+export const chargesRevenusHistorique = pgTable("charges_revenus_historique", {
+  id: id(),
+  chargeRevenuId: uuid("charge_revenu_id")
+    .notNull()
+    .references(() => chargesRevenus.id, { onDelete: "cascade" }),
+  montant: numeric("montant", { precision: 12, scale: 2 }).notNull(),
+  dateEffet: date("date_effet").notNull(),
+  createdAt: createdAt(),
+});
+
 // --- Dépenses et revenus du quotidien ------------------------------------
 
 export const categories = pgTable("categories", {
@@ -336,6 +373,8 @@ export const schema = {
   positions,
   cours,
   historiquePatrimoine,
+  chargesRevenus,
+  chargesRevenusHistorique,
   mouvements,
   plansInvestissement,
   categories,
