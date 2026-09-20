@@ -128,7 +128,7 @@ export function GraphiqueRepartitionPatrimoine({ historique }: { historique: Poi
       <div className="relative mt-3">
         {periodes.length === 0 ? (
           <p className="flex h-[140px] items-center justify-center text-center text-sm text-muted">
-            Pas encore d&apos;historique — chaque clic sur &quot;Actualiser les cours&quot; construit une donnée de plus.
+            Pas encore d&apos;historique — chaque tirage vers le bas pour actualiser construit une donnée de plus.
           </p>
         ) : (
           <svg

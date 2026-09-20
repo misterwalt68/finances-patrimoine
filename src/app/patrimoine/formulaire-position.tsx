@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import Link from "next/link";
 import { Champ, ChampSelect } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { Carte } from "@/components/ui/carte";
@@ -14,8 +15,11 @@ type Compte = { id: string; libelle: string; institutionId: string };
 type Institution = { id: string; nom: string };
 
 // La crypto se gère automatiquement via la synchronisation Coinbase — pas
-// d'ajout manuel proposé pour cette famille.
-const FAMILLES = TYPES_ACTIF.filter((t) => t.value !== "crypto");
+// d'ajout manuel proposé pour cette famille. Le cash non plus : une ligne
+// "cash" n'a de sens que reliée à une vraie connexion bancaire (le prix est
+// le solde en direct) — elle apparaît d'elle-même une fois le compte relié
+// dans Réglages > Comptes, jamais via ce formulaire générique.
+const FAMILLES = TYPES_ACTIF.filter((t) => t.value !== "crypto" && t.value !== "cash");
 
 export function FormulairePosition({
   listeActifs,
@@ -86,6 +90,16 @@ export function FormulairePosition({
           ))}
         </ChampSelect>
 
+        {famille === "" && (
+          <p className="text-xs text-muted">
+            Un compte bancaire (cash) ? Relie-le directement dans{" "}
+            <Link href="/reglages/comptes" className="text-accent underline">
+              Réglages → Comptes
+            </Link>{" "}
+            — il apparaît ici tout seul, sans passer par ce formulaire.
+          </p>
+        )}
+
         {famille === "" ? null : estMetal ? (
           <>
             <MenuIcone
@@ -136,12 +150,19 @@ export function FormulairePosition({
           </>
         ) : actifsDeLaFamille.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-muted">
-            Aucun actif de ce type pour l&apos;instant — crée-le d&apos;abord dans les réglages.
+            Aucun actif de ce type pour l&apos;instant —{" "}
+            <Link href="/reglages/actifs" className="text-accent underline">
+              crée-le d&apos;abord dans les réglages
+            </Link>
+            .
           </p>
         ) : listeComptes.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-muted">
-            Cette personne n&apos;a aucun compte pour l&apos;instant — crée-en un dans les réglages, ou
-            change de personne en haut de la page.
+            Cette personne n&apos;a aucun compte pour l&apos;instant —{" "}
+            <Link href="/reglages/comptes" className="text-accent underline">
+              crée-en un dans les réglages
+            </Link>
+            , ou change de personne en haut de la page.
           </p>
         ) : (
           <>

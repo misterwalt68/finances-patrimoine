@@ -45,7 +45,8 @@ export default async function PageComptes() {
           <p className="font-medium text-foreground">Comptes détectés, pas encore ajoutés</p>
           <p className="mt-1 text-sm text-muted">
             Vus via une connexion bancaire, mais pas encore rattachés à une personne — déplie et choisis à qui
-            ce compte appartient.
+            ce compte appartient. Il apparaîtra ensuite tout seul dans le patrimoine (catégorie Cash), sans
+            étape supplémentaire.
           </p>
           <ul className="mt-3 space-y-2">
             {comptesExternesNonRelies.map((ce) => (

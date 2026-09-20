@@ -31,7 +31,7 @@ export function AjouterPosition({
         type="button"
         onClick={() => setOuvert(true)}
         aria-label="Ajouter au patrimoine"
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-accent/40 to-accent/20 text-2xl leading-none text-accent shadow-lg shadow-black/30 backdrop-blur transition-opacity active:opacity-70"
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-3xl font-medium leading-none text-accent-foreground shadow-lg shadow-black/40 ring-4 ring-accent/20 transition-transform active:scale-95 active:opacity-80"
       >
         +
       </button>

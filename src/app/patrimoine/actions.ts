@@ -469,22 +469,29 @@ async function enregistrerSnapshotPatrimoine(): Promise<void> {
 }
 
 /**
- * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
+ * Un seul geste qui met tout à jour : synchronise Coinbase (crée/actualise/
  * retire des positions), rafraîchit le cours de tous les actifs ayant une
  * source automatique (dont les comptes bancaires DSP2), importe les
  * dernières transactions bancaires, et ré-enregistre l'historique complet
  * des métaux. Fusionné à la demande de Maxime — avoir un encart séparé pour
- * chaque connexion n'apportait rien de plus qu'un bouton "tout actualiser"
+ * chaque connexion n'apportait rien de plus qu'un geste "tout actualiser"
  * unique.
+ *
+ * Les étapes indépendantes tournent en parallèle plutôt qu'en séquence — sur
+ * un "tirer pour actualiser", chaque seconde compte : le solde du Livret A
+ * dépend des transactions bancaires (doit attendre leur import), mais
+ * l'historique des métaux, lui, ne dépend de rien d'autre.
  */
 export async function actualiserCours() {
-  await synchroniserSourcesMetaux();
-  await synchroniserCoinbase().catch(() => null);
+  await Promise.all([synchroniserSourcesMetaux(), synchroniserCoinbase().catch(() => null)]);
   const liste = await db.select().from(actifs);
-  await Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id)));
-  await synchroniserTransactionsBancaires().catch(() => null);
-  await ajusterSoldeLivretA().catch(() => null);
-  await chargerHistoriqueMetaux().catch(() => null);
+  await Promise.all([
+    Promise.allSettled(liste.map((a) => rafraichirCoursActif(a.id))),
+    chargerHistoriqueMetaux().catch(() => null),
+    synchroniserTransactionsBancaires()
+      .catch(() => null)
+      .then(() => ajusterSoldeLivretA().catch(() => null)),
+  ]);
   await enregistrerSnapshotPatrimoine().catch(() => null);
   revalidatePath("/patrimoine");
 }
