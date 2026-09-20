@@ -5,7 +5,7 @@ import { Champ, ChampSelect } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { Badge } from "@/components/ui/carte";
 import { PERIODICITES_CHARGE } from "@/lib/constants";
-import { modifierChargeRevenu, ajouterMontantHistorique, supprimerChargeRevenu } from "./actions";
+import { modifierChargeRevenu, supprimerChargeRevenu } from "./actions";
 import { GraphiqueEvolutionMontant, type PointMontant } from "./graphique-evolution-montant";
 
 type Personne = { id: string; libelle: string };
@@ -51,10 +51,6 @@ export function LigneChargeRevenu({
   const [, lancerEdition] = useActionState(async (_etat: null, formData: FormData) => {
     await modifierChargeRevenu(formData);
     fermer();
-    return null;
-  }, null);
-  const [, lancerMontant] = useActionState(async (_etat: null, formData: FormData) => {
-    await ajouterMontantHistorique(formData);
     return null;
   }, null);
 
@@ -122,25 +118,12 @@ export function LigneChargeRevenu({
             </div>
           )}
 
-          <form action={lancerMontant} className="flex items-end gap-2">
-            <input type="hidden" name="chargeRevenuId" value={charge.id} />
-            <div className="flex-1">
-              <Champ label="Nouveau montant (€)" name="montant" type="number" inputMode="decimal" step="any" required />
-            </div>
-            <div className="flex-1">
-              <Champ label="Depuis le" name="dateEffet" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
-            </div>
-            <Bouton type="submit" className="shrink-0">
-              Ajouter
-            </Bouton>
-          </form>
-
           <button
             type="button"
             onClick={() => setOuvertEdition(true)}
             className="text-sm text-muted underline transition-colors hover:text-foreground"
           >
-            Modifier les informations
+            Modifier
           </button>
         </div>
       </details>
@@ -173,6 +156,28 @@ export function LigneChargeRevenu({
                       </option>
                     ))}
                   </ChampSelect>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Champ
+                        label="Montant (€)"
+                        name="montant"
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        defaultValue={dernierMontant}
+                        required
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Champ
+                        label="Depuis le"
+                        name="dateEffet"
+                        type="date"
+                        defaultValue={new Date().toISOString().slice(0, 10)}
+                        required
+                      />
+                    </div>
+                  </div>
                   <Champ label="Fournisseur (optionnel)" name="fournisseur" defaultValue={charge.fournisseur ?? ""} />
                   <Champ label="Numéro client (optionnel)" name="numeroClient" defaultValue={charge.numeroClient ?? ""} />
                   <Champ label="Lien de suivi (optionnel)" name="lienSuivi" type="url" defaultValue={charge.lienSuivi ?? ""} />

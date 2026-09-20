@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { chargesRevenus, chargesRevenusHistorique } from "@/db/schema";
 
@@ -38,13 +38,23 @@ export async function creerChargeRevenu(formData: FormData) {
   revalidatePath("/budget");
 }
 
-/** Métadonnées uniquement — le montant se modifie via `ajouterMontant`, jamais ici, pour ne pas perdre l'historique. */
+/**
+ * Modifie une ligne au complet, exactement comme à la création — libellé,
+ * infos pratiques, ET montant, plutôt que d'obliger à passer par un autre
+ * bouton pour changer le montant (source de confusion : "modifier" doit
+ * permettre de tout remodifier). Le montant n'écrase l'historique que s'il a
+ * réellement changé — une simple correction du fournisseur ne doit pas
+ * ajouter un faux point "toujours le même montant, aujourd'hui" à la courbe
+ * d'évolution.
+ */
 export async function modifierChargeRevenu(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   const libelle = String(formData.get("libelle") ?? "").trim();
   const periodicite = String(formData.get("periodicite") ?? "").trim();
   const personneId = String(formData.get("personneId") ?? "").trim();
-  if (!id || !libelle || !periodicite || !personneId) return;
+  const montant = String(formData.get("montant") ?? "").trim();
+  const dateEffet = String(formData.get("dateEffet") ?? "").trim();
+  if (!id || !libelle || !periodicite || !personneId || !montant || !dateEffet) return;
 
   const fournisseur = String(formData.get("fournisseur") ?? "").trim();
   const numeroClient = String(formData.get("numeroClient") ?? "").trim();
@@ -64,22 +74,17 @@ export async function modifierChargeRevenu(formData: FormData) {
     })
     .where(eq(chargesRevenus.id, id));
 
-  revalidatePath("/budget");
-}
+  const [dernier] = await db
+    .select()
+    .from(chargesRevenusHistorique)
+    .where(eq(chargesRevenusHistorique.chargeRevenuId, id))
+    .orderBy(desc(chargesRevenusHistorique.dateEffet), desc(chargesRevenusHistorique.createdAt))
+    .limit(1);
 
-/**
- * Ajoute un nouveau montant à l'historique d'une charge/revenu plutôt que
- * d'écraser l'ancien — c'est ce qui permet de voir plus tard "la taxe
- * foncière a augmenté chaque année depuis 5 ans" au lieu de perdre les
- * valeurs précédentes à chaque mise à jour.
- */
-export async function ajouterMontantHistorique(formData: FormData) {
-  const chargeRevenuId = String(formData.get("chargeRevenuId") ?? "").trim();
-  const montant = String(formData.get("montant") ?? "").trim();
-  const dateEffet = String(formData.get("dateEffet") ?? "").trim();
-  if (!chargeRevenuId || !montant || !dateEffet) return;
+  if (!dernier || Number(dernier.montant) !== Number(montant)) {
+    await db.insert(chargesRevenusHistorique).values({ chargeRevenuId: id, montant, dateEffet });
+  }
 
-  await db.insert(chargesRevenusHistorique).values({ chargeRevenuId, montant, dateEffet });
   revalidatePath("/budget");
 }
 
