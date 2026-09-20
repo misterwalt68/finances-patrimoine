@@ -33,8 +33,12 @@ export function CamembertAllocation({
   const circonference = 2 * Math.PI * rayon;
   const espace = 3; // gap visuel entre segments, en unités de circonférence
 
-  const segments = groupes
+  // Plus grosse part en premier — dans le donut comme dans la légende —
+  // plutôt que l'ordre fixe des familles (utile ailleurs pour la couleur,
+  // pas pour la lecture d'un camembert).
+  const segments = [...groupes]
     .filter((g) => g.valeur > 0)
+    .sort((a, b) => b.valeur - a.valeur)
     .reduce<{ decalage: number; items: Array<{
       type: string;
       valeur: number;
