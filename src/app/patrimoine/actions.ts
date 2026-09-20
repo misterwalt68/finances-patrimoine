@@ -140,7 +140,7 @@ export async function modifierPosition(formData: FormData) {
       prix: valeurActuelle,
       source: "manuel",
     });
-    if (actif.type === "cash") {
+    if (actif.type === "cash" || actif.type === "securite") {
       valeurs.prixRevientMoyen = valeurActuelle;
     }
   }

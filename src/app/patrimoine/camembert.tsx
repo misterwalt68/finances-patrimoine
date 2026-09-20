@@ -11,6 +11,7 @@ export const COULEURS_PAR_TYPE: Record<string, string> = {
   fonds: "#d55181",
   immobilier: "#008300",
   cash: "#9085e9",
+  securite: "#2bb3a3",
   autre: "#e66767",
 };
 

@@ -110,6 +110,6 @@ export function IconeActif({
   if (identifiantExterne && identifiantExterne in LOGOS_BANQUE) {
     return <IconeBanque identifiantExterne={identifiantExterne} />;
   }
-  if (type === "cash") return <IconeBanque identifiantExterne={identifiantExterne} />;
+  if (type === "cash" || type === "securite") return <IconeBanque identifiantExterne={identifiantExterne} />;
   return null;
 }

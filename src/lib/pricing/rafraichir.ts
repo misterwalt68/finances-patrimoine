@@ -36,7 +36,7 @@ export async function rafraichirCoursActif(actifId: string): Promise<number | nu
   // §4, apports vs performance). On aligne le prix de revient sur le
   // dernier solde connu pour que la position affiche sa vraie valeur sans
   // jamais faire apparaître un "gain" ou une "perte" qui n'a pas de sens ici.
-  if (actif.type === "cash") {
+  if (actif.type === "cash" || actif.type === "securite") {
     await db
       .update(positions)
       .set({ prixRevientMoyen: String(prix) })

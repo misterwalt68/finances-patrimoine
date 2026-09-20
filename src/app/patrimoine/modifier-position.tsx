@@ -44,7 +44,9 @@ export function ModifierPositionBouton({
   const [saisieSuppression, setSaisieSuppression] = useState("");
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
 
-  const estCash = actifType === "cash";
+  // "securite" (ex. Livret A) suit exactement les mêmes règles qu'un compte
+  // cash : un seul solde, pas de quantité ni de notion d'achat.
+  const estCash = actifType === "cash" || actifType === "securite";
   // Un compte cash relié en DSP2 (BoursoBank, Trade Republic) a son solde
   // géré automatiquement à chaque actualisation — rien à saisir ici. Un
   // compte cash "manuel" (ex. Livret A, hors DSP2) a besoin d'une saisie de

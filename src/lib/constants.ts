@@ -25,9 +25,10 @@ export const TYPES_ACTIF = [
   { value: "etf", label: "ETF" },
   { value: "crypto", label: "Crypto" },
   { value: "metal", label: "Métal" },
-  { value: "fonds", label: "Fonds / unité de compte" },
+  { value: "fonds", label: "Bourse" },
   { value: "immobilier", label: "Immobilier (parts)" },
-  { value: "cash", label: "Comptes" },
+  { value: "cash", label: "Cash" },
+  { value: "securite", label: "Matelas de sécurité" },
   { value: "autre", label: "Autre" },
 ] as const;
 

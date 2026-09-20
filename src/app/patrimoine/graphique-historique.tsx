@@ -517,3 +517,21 @@ export function GraphiqueHistoriqueFonds({
 
   return <GraphiqueHistorique series={series} coursParSerie={coursParActif} />;
 }
+
+/** Façade matelas de sécurité (ex. Livret A) — même principe que les comptes, sans marqueur. */
+export function GraphiqueHistoriqueSecurite({
+  actifs,
+  coursParActif,
+}: {
+  actifs: CompteGraphique[];
+  coursParActif: Record<string, PointCours[]>;
+}) {
+  const series = actifs.map((a) => ({
+    id: a.actifId,
+    libelle: a.libelle,
+    couleur: COULEURS_PAR_TYPE.securite,
+    icone: <IconeBanque identifiantExterne={a.identifiantExterne} className="h-4 w-4" />,
+  }));
+
+  return <GraphiqueHistorique series={series} coursParSerie={coursParActif} />;
+}

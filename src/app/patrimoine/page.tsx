@@ -10,7 +10,12 @@ import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
 import { ModifierPositionBouton } from "./modifier-position";
 import { IconeActif } from "@/lib/icones-actifs";
-import { GraphiqueHistoriqueMetal, GraphiqueHistoriqueComptes, GraphiqueHistoriqueFonds } from "./graphique-historique";
+import {
+  GraphiqueHistoriqueMetal,
+  GraphiqueHistoriqueComptes,
+  GraphiqueHistoriqueFonds,
+  GraphiqueHistoriqueSecurite,
+} from "./graphique-historique";
 import { GraphiqueDepliable } from "./graphique-depliable";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
@@ -199,6 +204,23 @@ export default async function PagePatrimoine() {
     });
   }
 
+  // Même principe pour le matelas de sécurité (ex. Livret A).
+  const securiteGraphique = lignes
+    .filter((l) => l.actif?.type === "securite")
+    .map((l) => ({
+      actifId: l.actif!.id,
+      libelle: `${l.actif!.libelle}${l.compte?.libelle ? ` (${l.compte.libelle})` : ""}`,
+      identifiantExterne: l.actif!.identifiantExterne ?? null,
+    }));
+  const coursParActifSecurite: Record<string, { date: string; prix: number }[]> = {};
+  for (const c of listeCours) {
+    if (!securiteGraphique.some((sg) => sg.actifId === c.actifId)) continue;
+    (coursParActifSecurite[c.actifId] ??= []).push({
+      date: c.horodatage.toISOString(),
+      prix: Number(c.prix),
+    });
+  }
+
   // Regroupement par famille (type d'actif) — l'ordre suit TYPES_ACTIF,
   // seules les familles ayant au moins une position sont affichées.
   const groupes = TYPES_ACTIF.map((t) => ({
@@ -372,6 +394,11 @@ export default async function PagePatrimoine() {
                       <GraphiqueHistoriqueFonds fonds={fondsGraphique} coursParActif={coursParActifFonds} />
                     </GraphiqueDepliable>
                   )}
+                  {groupe.type === "securite" && securiteGraphique.length > 0 && (
+                    <GraphiqueDepliable>
+                      <GraphiqueHistoriqueSecurite actifs={securiteGraphique} coursParActif={coursParActifSecurite} />
+                    </GraphiqueDepliable>
+                  )}
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => {
                       const niveau = l.joursDepuisMaj !== undefined ? niveauPeremption(l.joursDepuisMaj) : "frais";
@@ -393,7 +420,7 @@ export default async function PagePatrimoine() {
                               identifiantExterne={l.actif?.identifiantExterne}
                             />
                             {l.actif?.libelle ?? "—"}
-                            {l.actif?.type === "cash" && l.compte?.libelle && (
+                            {(l.actif?.type === "cash" || l.actif?.type === "securite") && l.compte?.libelle && (
                               <span className="text-sm font-normal text-muted">({l.compte.libelle})</span>
                             )}
                           </p>
