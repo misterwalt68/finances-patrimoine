@@ -2,12 +2,9 @@ import Link from "next/link";
 import { db } from "@/db";
 import { chargesRevenus, chargesRevenusHistorique, personnes } from "@/db/schema";
 import { Carte, ListeVide } from "@/components/ui/carte";
-import { Champ, ChampSelect } from "@/components/ui/champ";
-import { Bouton } from "@/components/ui/bouton";
-import { TYPES_CHARGE_REVENU, PERIODICITES_CHARGE } from "@/lib/constants";
-import { creerChargeRevenu } from "./actions";
 import { GraphiqueComparaisonMensuelle } from "./graphique-comparaison";
 import { LigneChargeRevenu } from "./ligne-charge-revenu";
+import { AjouterChargeRevenu } from "./ajouter-charge-revenu";
 
 // Même ordre d'affichage que le reste de l'app (patrimoine) — Maxime et
 // Amélie d'abord, Couple ensuite.
@@ -80,69 +77,6 @@ export default async function PageBudget() {
             </Carte>
           )}
 
-          <Carte className="mb-4">
-            <p className="mb-3 font-medium text-foreground">Ajouter une ligne</p>
-            <form action={creerChargeRevenu} className="space-y-3">
-              <ChampSelect label="Type" name="type" required defaultValue="">
-                <option value="" disabled>
-                  Choisir…
-                </option>
-                {TYPES_CHARGE_REVENU.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </ChampSelect>
-              <Champ label="Libellé" name="libelle" placeholder="Ex. Salaire, Eau, Taxe foncière…" required />
-              <ChampSelect label="Périodicité" name="periodicite" required defaultValue="">
-                <option value="" disabled>
-                  Choisir…
-                </option>
-                {PERIODICITES_CHARGE.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </ChampSelect>
-              <ChampSelect label="Personne" name="personneId" required defaultValue="">
-                <option value="" disabled>
-                  Choisir…
-                </option>
-                {personnesTriees.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.libelle}
-                  </option>
-                ))}
-              </ChampSelect>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Champ label="Montant (€)" name="montant" type="number" inputMode="decimal" step="any" required />
-                </div>
-                <div className="flex-1">
-                  <Champ
-                    label="Depuis le"
-                    name="dateEffet"
-                    type="date"
-                    defaultValue={new Date().toISOString().slice(0, 10)}
-                    required
-                  />
-                </div>
-              </div>
-              <details>
-                <summary className="cursor-pointer text-sm text-muted">Plus d&apos;options</summary>
-                <div className="mt-3 space-y-3">
-                  <Champ label="Fournisseur (optionnel)" name="fournisseur" placeholder="Ex. Suez, Free…" />
-                  <Champ label="Numéro client (optionnel)" name="numeroClient" />
-                  <Champ label="Lien de suivi (optionnel)" name="lienSuivi" type="url" placeholder="https://…" />
-                  <Champ label="Note (optionnel)" name="note" />
-                </div>
-              </details>
-              <Bouton type="submit" className="w-full">
-                Ajouter
-              </Bouton>
-            </form>
-          </Carte>
-
           <div className="space-y-4">
             <div>
               <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted">
@@ -193,6 +127,10 @@ export default async function PageBudget() {
                 </Carte>
               )}
             </div>
+          </div>
+
+          <div className="fixed bottom-6 right-5 z-40">
+            <AjouterChargeRevenu personnes={personnesTriees} />
           </div>
         </>
       )}
