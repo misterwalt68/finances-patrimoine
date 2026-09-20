@@ -165,7 +165,7 @@ async function chargerHistoriqueMetaux(): Promise<void> {
  * `transaction_id` est vérifié en direct comme toujours vide chez
  * BoursoBank, contrairement à `entry_reference`.
  */
-async function synchroniserTransactionsBancaires(): Promise<void> {
+export async function synchroniserTransactionsBancaires(): Promise<void> {
   const comptesLies = await db
     .select({ id: comptes.id, uid: comptes.enableBankingAccountId })
     .from(comptes)
