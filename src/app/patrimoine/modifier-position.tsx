@@ -68,7 +68,13 @@ export function ModifierPositionBouton({
   // notion d'achat ponctuel. Ne s'applique jamais à un actif "normal"
   // (action, ETF, crypto, métal), où ces champs restent utiles.
   const estContexteFixe = estCash || estValeurManuelle;
-  const labelPrixRevient = estValeurManuelle ? "Montant investi au total (€)" : "Prix de revient moyen (€, optionnel)";
+  const labelPrixRevient = "Prix de revient moyen (€, optionnel)";
+  // Pour un "fonds" à cours manuel (Assurance-vie, PEA, CTO…), Maxime ne
+  // connaît jamais le montant investi brut — seulement ce que son courtier
+  // affiche : la valeur actuelle et la performance depuis le début, en euros
+  // OU en pourcentage selon l'écran. On calcule le montant investi à partir
+  // de ces deux nombres plutôt que de le lui demander directement.
+  const estFondsManuel = estValeurManuelle && !estCash;
 
   const apports = valeurActuelle !== undefined && performance !== undefined ? valeurActuelle - performance : undefined;
   const performancePct = apports !== undefined && performance !== undefined && apports !== 0 ? (performance / apports) * 100 : null;
@@ -182,15 +188,25 @@ export function ModifierPositionBouton({
                       required={estCash}
                     />
                   )}
-                  {!estCash && (
+                  {estFondsManuel ? (
                     <Champ
-                      label={labelPrixRevient}
-                      name="prixRevientMoyen"
-                      type="number"
+                      label="Performance depuis le début"
+                      name="performanceGain"
+                      type="text"
                       inputMode="decimal"
-                      step="any"
-                      defaultValue={position.prixRevientMoyen ?? ""}
+                      placeholder="ex. +150 ou -11,15%"
                     />
+                  ) : (
+                    !estCash && (
+                      <Champ
+                        label={labelPrixRevient}
+                        name="prixRevientMoyen"
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        defaultValue={position.prixRevientMoyen ?? ""}
+                      />
+                    )
                   )}
                   <Champ
                     label="Description (optionnel)"

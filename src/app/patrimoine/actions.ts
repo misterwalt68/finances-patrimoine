@@ -145,6 +145,21 @@ export async function modifierPosition(formData: FormData) {
     }
   }
 
+  // Pour un "fonds" à cours manuel, Maxime ne connaît que ce que son courtier
+  // affiche — la performance depuis le début, tantôt en euros ("+150"),
+  // tantôt en pourcentage ("-11,15%") — jamais le montant investi brut. On le
+  // déduit de la valeur actuelle plutôt que de le lui demander directement.
+  const performanceBrute = String(formData.get("performanceGain") ?? "").trim();
+  if (performanceBrute && valeurActuelle) {
+    const nombreValeur = Number(valeurActuelle);
+    const estPourcentage = performanceBrute.includes("%");
+    const nombreGain = Number(performanceBrute.replace(/[%\s]/g, "").replace(",", "."));
+    if (!Number.isNaN(nombreGain) && !Number.isNaN(nombreValeur)) {
+      const montantInvesti = estPourcentage ? nombreValeur / (1 + nombreGain / 100) : nombreValeur - nombreGain;
+      valeurs.prixRevientMoyen = montantInvesti.toFixed(2);
+    }
+  }
+
   await db.update(positions).set(valeurs).where(eq(positions.id, id));
   revalidatePath("/patrimoine");
 }
