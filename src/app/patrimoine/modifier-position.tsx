@@ -48,10 +48,17 @@ export function ModifierPositionBouton({
   // Un compte cash relié en DSP2 (BoursoBank, Trade Republic) a son solde
   // géré automatiquement à chaque actualisation — rien à saisir ici. Un
   // compte cash "manuel" (ex. Livret A, hors DSP2) a besoin d'une saisie de
-  // solde ; comme pour tout actif à cours manuel (ex. future Assurance-vie),
-  // ce nouveau solde/valeur devient un nouveau point d'historique (`cours`),
+  // solde ; comme pour tout actif à cours manuel (ex. Assurance-vie), ce
+  // nouveau solde/valeur devient un nouveau point d'historique (`cours`),
   // pas seulement une correction du prix de revient.
   const estValeurManuelle = sourcePrix === "manuel";
+  // Une ligne "à contexte fixe" (un compte bancaire, une assurance-vie…) n'a
+  // ni quantité, ni compte à choisir, ni date d'achat qui aient un sens —
+  // c'est toujours le même compte réel, une seule "part" possédée, sans
+  // notion d'achat ponctuel. Ne s'applique jamais à un actif "normal"
+  // (action, ETF, crypto, métal), où ces champs restent utiles.
+  const estContexteFixe = estCash || estValeurManuelle;
+  const labelPrixRevient = estValeurManuelle ? "Montant investi au total (€)" : "Prix de revient moyen (€, optionnel)";
 
   const institutionsParId = useMemo(
     () => new Map(listeInstitutions.map((i) => [i.id, i])),
@@ -114,33 +121,37 @@ export function ModifierPositionBouton({
                 </div>
                 <form action={lancer} className="space-y-3">
                   <input type="hidden" name="id" value={position.id} />
-                  <ChampSelect label="Compte" name="compteId" defaultValue={position.compteId} required>
-                    {listeComptes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
-                      </option>
-                    ))}
-                  </ChampSelect>
+                  {estContexteFixe ? (
+                    <input type="hidden" name="compteId" value={position.compteId} />
+                  ) : (
+                    <ChampSelect label="Compte" name="compteId" defaultValue={position.compteId} required>
+                      {listeComptes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.libelle} · {institutionsParId.get(c.institutionId)?.nom}
+                        </option>
+                      ))}
+                    </ChampSelect>
+                  )}
+                  {!estContexteFixe && (
+                    <Champ
+                      label="Quantité"
+                      name="quantite"
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      defaultValue={position.quantite}
+                      required
+                    />
+                  )}
                   {!estCash && (
-                    <>
-                      <Champ
-                        label="Quantité"
-                        name="quantite"
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        defaultValue={position.quantite}
-                        required
-                      />
-                      <Champ
-                        label="Prix de revient moyen (€, optionnel)"
-                        name="prixRevientMoyen"
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        defaultValue={position.prixRevientMoyen ?? ""}
-                      />
-                    </>
+                    <Champ
+                      label={labelPrixRevient}
+                      name="prixRevientMoyen"
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      defaultValue={position.prixRevientMoyen ?? ""}
+                    />
                   )}
                   {estValeurManuelle && (
                     <Champ
@@ -160,12 +171,14 @@ export function ModifierPositionBouton({
                     placeholder="Note libre…"
                     defaultValue={position.note ?? ""}
                   />
-                  <Champ
-                    label="Date d'achat (optionnel)"
-                    name="dateAcquisition"
-                    type="date"
-                    defaultValue={position.dateAcquisition ?? ""}
-                  />
+                  {!estContexteFixe && (
+                    <Champ
+                      label="Date d'achat (optionnel)"
+                      name="dateAcquisition"
+                      type="date"
+                      defaultValue={position.dateAcquisition ?? ""}
+                    />
+                  )}
                   <Bouton type="submit" className="w-full">
                     Enregistrer
                   </Bouton>

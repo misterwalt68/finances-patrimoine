@@ -108,7 +108,6 @@ export async function modifierPosition(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   const compteId = String(formData.get("compteId") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
-  const dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim();
   if (!id || !compteId) return;
 
   const [positionExistante] = await db.select().from(positions).where(eq(positions.id, id));
@@ -118,14 +117,19 @@ export async function modifierPosition(formData: FormData) {
   const valeurs: Partial<typeof positions.$inferInsert> = {
     compteId,
     note: note || null,
-    dateAcquisition: dateAcquisition || null,
   };
 
+  // `formData.has(...)` distingue "champ absent du formulaire pour ce
+  // contexte, ne pas toucher" (ex. date d'achat masquée pour un Livret A)
+  // de "champ présent mais vidé, remettre à null".
   if (formData.has("quantite")) {
     valeurs.quantite = String(formData.get("quantite") ?? "").trim();
   }
   if (formData.has("prixRevientMoyen")) {
     valeurs.prixRevientMoyen = String(formData.get("prixRevientMoyen") ?? "").trim() || null;
+  }
+  if (formData.has("dateAcquisition")) {
+    valeurs.dateAcquisition = String(formData.get("dateAcquisition") ?? "").trim() || null;
   }
 
   const valeurActuelle = String(formData.get("valeurActuelle") ?? "").trim();

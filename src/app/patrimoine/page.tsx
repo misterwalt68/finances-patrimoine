@@ -33,6 +33,29 @@ const formatEurPrecis = (n: number) =>
 // ambigu — les métaux se pèsent en grammes.
 const uniteQuantite = (type: string | undefined) => (type === "metal" ? "unités (grammes)" : "unités");
 
+/**
+ * Péremption d'un cours manuel (Livret A, Assurance-vie…) — un actif hors
+ * DSP2 dérive silencieusement de la réalité si on ne le recale pas de temps
+ * en temps. Escalade visuelle progressive plutôt qu'un simple oui/non, pour
+ * qu'un léger retard (10j) se distingue d'un oubli prolongé (30j+) — jamais
+ * mis à jour du tout est traité comme le pire des cas.
+ */
+type NiveauPeremption = "frais" | "jaune" | "orange" | "rouge";
+const SEUIL_JAUNE = 10;
+const SEUIL_ORANGE = 20;
+const SEUIL_ROUGE = 30;
+function niveauPeremption(joursDepuis: number | null): NiveauPeremption {
+  if (joursDepuis === null || joursDepuis >= SEUIL_ROUGE) return "rouge";
+  if (joursDepuis >= SEUIL_ORANGE) return "orange";
+  if (joursDepuis >= SEUIL_JAUNE) return "jaune";
+  return "frais";
+}
+const STYLE_PEREMPTION: Record<Exclude<NiveauPeremption, "frais">, { couleur: string; ombre: string }> = {
+  jaune: { couleur: "#e0c93e", ombre: "0 0 6px 0px rgba(224,201,62,0.35)" },
+  orange: { couleur: "var(--warning)", ombre: "0 0 10px 1px rgba(224,168,62,0.45)" },
+  rouge: { couleur: "var(--negative)", ombre: "0 0 18px 3px rgba(229,88,74,0.6)" },
+};
+
 export default async function PagePatrimoine() {
   const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours] =
     await Promise.all([
@@ -51,6 +74,12 @@ export default async function PagePatrimoine() {
     if (!dernierCoursParActifId.has(c.actifId)) dernierCoursParActifId.set(c.actifId, c);
   }
 
+  // Composant serveur (pas de "use client") : recalculé une fois par
+  // requête, jamais par un re-render client — l'impureté que la règle
+  // react-hooks/purity redoute (pensée pour le rendu client) n'a pas prise ici.
+  // eslint-disable-next-line react-hooks/purity
+  const maintenantMs = Date.now();
+
   const lignes = listePositions.map((p) => {
     const actif = actifsParId.get(p.actifId);
     const compte = comptesParId.get(p.compteId);
@@ -64,7 +93,15 @@ export default async function PagePatrimoine() {
           dernierCours: Number(dernierCours.prix),
         })
       : null;
-    return { position: p, actif, compte, dernierCours, calcul, quantite, prixRevientMoyen };
+    // Uniquement pertinent pour un cours manuel (Livret A, Assurance-vie…) —
+    // un actif à source automatique n'a jamais besoin d'être "recalé".
+    const joursDepuisMaj =
+      actif?.sourcePrix === "manuel"
+        ? dernierCours
+          ? Math.floor((maintenantMs - dernierCours.horodatage.getTime()) / (24 * 60 * 60 * 1000))
+          : null
+        : undefined;
+    return { position: p, actif, compte, dernierCours, calcul, quantite, prixRevientMoyen, joursDepuisMaj };
   });
 
   const totalValeur = lignes.reduce((s, l) => s + (l.calcul?.valeurActuelle ?? 0), 0);
@@ -186,25 +223,17 @@ export default async function PagePatrimoine() {
       };
     });
 
-  // Rappel mensuel : tout actif dont le cours n'est pas suivi automatiquement
-  // (Livret A, une future Assurance-vie…) peut dériver silencieusement de la
-  // réalité sans qu'on y touche — jamais mis à jour, ou mis à jour il y a
-  // plus de 30 jours, deux cas où ça vaut le coup d'aller vérifier.
-  // Composant serveur (pas de "use client") : recalculé une fois par
-  // requête, jamais par un re-render client — l'impureté que la règle
-  // react-hooks/purity redoute (pensée pour le rendu client) n'a pas prise ici.
-  // eslint-disable-next-line react-hooks/purity
-  const maintenantMs = Date.now();
+  // Rappel "péremption" : tout actif à cours manuel (Livret A, Assurance-
+  // vie…) jamais mis à jour ou pas revu depuis le seuil orange (20 jours) —
+  // même seuil que l'encadrement visuel de chaque ligne, une seule vérité.
   const actifsAVerifier = lignes
-    .filter((l) => l.actif?.sourcePrix === "manuel")
+    .filter((l) => l.joursDepuisMaj !== undefined)
     .map((l) => ({
       id: l.position.id,
       libelle: `${l.actif!.libelle}${l.compte?.libelle ? ` (${l.compte.libelle})` : ""}`,
-      joursDepuis: l.dernierCours
-        ? Math.floor((maintenantMs - l.dernierCours.horodatage.getTime()) / (24 * 60 * 60 * 1000))
-        : null,
+      joursDepuis: l.joursDepuisMaj as number | null,
     }))
-    .filter((a) => a.joursDepuis === null || a.joursDepuis >= 30);
+    .filter((a) => a.joursDepuis === null || a.joursDepuis >= SEUIL_ORANGE);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
@@ -239,7 +268,7 @@ export default async function PagePatrimoine() {
       {actifsAVerifier.length > 0 && (
         <Carte className="mb-4">
           <p className="flex items-center gap-1.5 text-sm font-medium text-warning">
-            <span aria-hidden>⚠</span> À vérifier ce mois-ci
+            <span aria-hidden>⚠</span> Péremption — à vérifier
           </p>
           <p className="mt-1 text-sm text-muted">
             Ces montants ne sont pas suivis en direct — pense à les recaler sur leur vraie valeur.
@@ -344,8 +373,19 @@ export default async function PagePatrimoine() {
                     </GraphiqueDepliable>
                   )}
                   <ul className="divide-y divide-line border-t border-line px-4">
-                    {groupe.lignes.map((l) => (
-                      <li key={l.position.id} className="relative py-3 pr-6">
+                    {groupe.lignes.map((l) => {
+                      const niveau = l.joursDepuisMaj !== undefined ? niveauPeremption(l.joursDepuisMaj) : "frais";
+                      const stylePeremption = niveau !== "frais" ? STYLE_PEREMPTION[niveau] : null;
+                      return (
+                      <li
+                        key={l.position.id}
+                        className={`relative py-3 pr-6 ${stylePeremption ? "-mx-2 rounded-lg border-l-4 px-3" : ""}`}
+                        style={
+                          stylePeremption
+                            ? { borderLeftColor: stylePeremption.couleur, boxShadow: stylePeremption.ombre }
+                            : undefined
+                        }
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <p className="flex items-center gap-2 font-medium text-foreground">
                             <IconeActif
@@ -391,6 +431,14 @@ export default async function PagePatrimoine() {
                             </span>
                           </p>
                         )}
+                        {stylePeremption && (
+                          <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: stylePeremption.couleur }}>
+                            <span aria-hidden>⚠</span>
+                            {l.joursDepuisMaj === null
+                              ? "Jamais mis à jour"
+                              : `Il y a ${l.joursDepuisMaj} jours sans mise à jour`}
+                          </p>
+                        )}
                         <div className="absolute bottom-2 right-0">
                           <ModifierPositionBouton
                             position={l.position}
@@ -402,7 +450,8 @@ export default async function PagePatrimoine() {
                           />
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 </details>
               );
