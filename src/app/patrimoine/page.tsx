@@ -6,7 +6,6 @@ import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { TYPES_ACTIF } from "@/lib/constants";
 import { actualiserCours } from "./actions";
-import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
 import { GraphiqueRepartitionPatrimoine } from "./graphique-repartition";
 import { CarrouselTuiles } from "./carrousel-tuiles";
@@ -301,12 +300,6 @@ export default async function PagePatrimoine({
     }))
     .filter((a) => a.joursDepuis === null || a.joursDepuis >= PEREMPTION_SEUIL_BANNIERE);
 
-  // Le formulaire d'ajout ne propose que les comptes de la personne
-  // actuellement affichée — pas d'agrégation même pour "Couple", qui n'a que
-  // ses propres comptes communs (ex. Crédit Mutuel) : c'est ce choix qui
-  // détermine à qui la nouvelle ligne est rattachée.
-  const comptesPourAjout = listeComptes.filter((c) => c.personneId === personneActive?.id);
-
   return (
     <TirerPourActualiser action={actualiserCours}>
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
@@ -513,7 +506,7 @@ export default async function PagePatrimoine({
                           )}
                           {l.position.provisoire && <Badge>Provisoire</Badge>}
                         </div>
-                        {l.calcul && (
+                        {l.calcul && l.actif?.type !== "cash" && l.actif?.type !== "securite" && (
                           <p className="mt-1 text-sm">
                             <span className="text-muted">
                               Apports {formatEurPrecis(l.calcul.apports)} ·{" "}
@@ -557,16 +550,6 @@ export default async function PagePatrimoine({
         </div>
       </div>
 
-      {!donneesInsuffisantes && personneActive && (
-        <div className="fixed bottom-6 right-5 z-40">
-          <AjouterPosition
-            listeActifs={listeActifs}
-            listeComptes={comptesPourAjout}
-            listeInstitutions={listeInstitutions}
-            personneActiveId={personneActive.id}
-          />
-        </div>
-      )}
     </div>
     </TirerPourActualiser>
   );

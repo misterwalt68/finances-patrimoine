@@ -57,6 +57,7 @@ export const COULEUR_BANQUE = "#9085e9";
 const LOGOS_BANQUE: Record<string, string> = {
   boursobank: "/logos/boursobank.png",
   trade_republic: "/logos/trade-republic.png",
+  credit_mutuel: "/logos/credit-mutuel.png",
 };
 
 export function IconeBanque({ identifiantExterne, className }: { identifiantExterne?: string | null; className?: string }) {
