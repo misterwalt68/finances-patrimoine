@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { actifs, comptes, cours, institutions, parametres, positions, transactions } from "@/db/schema";
+import { actifs, comptes, cours, historiquePatrimoine, institutions, parametres, positions, transactions } from "@/db/schema";
 import { rafraichirCoursActif } from "@/lib/pricing/rafraichir";
 import { rechercherSurCoinGecko } from "@/lib/pricing/adaptateurs/coingecko";
 import { obtenirAdaptateur } from "@/lib/pricing/registre";
@@ -390,6 +390,47 @@ async function ajusterSoldeLivretA(): Promise<void> {
 }
 
 /**
+ * Photo du patrimoine total par famille (`actifs.type`), prise à chaque
+ * actualisation — construit au fil du temps l'historique nécessaire au
+ * graphique d'évolution globale (patrimoine/graphique-repartition.tsx).
+ * Part de zéro à sa création : jamais reconstruite rétroactivement depuis
+ * les cours déjà accumulés (décision de Maxime — un historique fabriqué
+ * après coup serait faux, l'app n'ayant pas suivi le patrimoine avant).
+ */
+async function enregistrerSnapshotPatrimoine(): Promise<void> {
+  const [listePositions, listeActifsTous, listeCoursTous] = await Promise.all([
+    db.select().from(positions),
+    db.select().from(actifs),
+    db.select().from(cours).orderBy(desc(cours.horodatage)),
+  ]);
+
+  const actifsParId = new Map(listeActifsTous.map((a) => [a.id, a]));
+  const dernierCoursParActifId = new Map<string, (typeof listeCoursTous)[number]>();
+  for (const c of listeCoursTous) {
+    if (!dernierCoursParActifId.has(c.actifId)) dernierCoursParActifId.set(c.actifId, c);
+  }
+
+  const valeurParType = new Map<string, number>();
+  for (const p of listePositions) {
+    const actif = actifsParId.get(p.actifId);
+    const dernierCours = actif ? dernierCoursParActifId.get(actif.id) : undefined;
+    if (!actif || !dernierCours) continue;
+    const valeur = Number(p.quantite) * Number(dernierCours.prix);
+    valeurParType.set(actif.type, (valeurParType.get(actif.type) ?? 0) + valeur);
+  }
+  if (valeurParType.size === 0) return;
+
+  const horodatage = new Date();
+  await db.insert(historiquePatrimoine).values(
+    [...valeurParType.entries()].map(([type, valeur]) => ({
+      horodatage,
+      type,
+      valeur: valeur.toFixed(2),
+    })),
+  );
+}
+
+/**
  * Un seul bouton qui met tout à jour : synchronise Coinbase (crée/actualise/
  * retire des positions), rafraîchit le cours de tous les actifs ayant une
  * source automatique (dont les comptes bancaires DSP2), importe les
@@ -406,6 +447,7 @@ export async function actualiserCours() {
   await synchroniserTransactionsBancaires().catch(() => null);
   await ajusterSoldeLivretA().catch(() => null);
   await chargerHistoriqueMetaux().catch(() => null);
+  await enregistrerSnapshotPatrimoine().catch(() => null);
   revalidatePath("/patrimoine");
 }
 

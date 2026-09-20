@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
-import { positions, actifs, comptes, institutions, cours } from "@/db/schema";
+import { positions, actifs, comptes, institutions, cours, historiquePatrimoine } from "@/db/schema";
 import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { TYPES_ACTIF } from "@/lib/constants";
 import { actualiserCours } from "./actions";
 import { AjouterPosition } from "./ajouter-position";
 import { CamembertAllocation } from "./camembert";
+import { GraphiqueRepartitionPatrimoine } from "./graphique-repartition";
+import { CarrouselTuiles } from "./carrousel-tuiles";
 import { ModifierPositionBouton } from "./modifier-position";
 import { IconeActif } from "@/lib/icones-actifs";
 import {
@@ -61,13 +63,14 @@ function stylePeremption(joursDepuis: number | null): { couleur: string; ombre: 
 }
 
 export default async function PagePatrimoine() {
-  const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours] =
+  const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours, listeHistoriquePatrimoine] =
     await Promise.all([
       db.select().from(positions).orderBy(positions.updatedAt),
       db.select().from(actifs).orderBy(actifs.libelle),
       db.select().from(comptes).orderBy(comptes.libelle),
       db.select().from(institutions),
       db.select().from(cours).orderBy(desc(cours.horodatage)),
+      db.select().from(historiquePatrimoine).orderBy(historiquePatrimoine.horodatage),
     ]);
 
   const actifsParId = new Map(listeActifs.map((a) => [a.id, a]));
@@ -329,7 +332,19 @@ export default async function PagePatrimoine() {
       {groupes.length > 0 && (
         <div className="mt-4">
           <Carte>
-            <CamembertAllocation groupes={groupes} />
+            <CarrouselTuiles
+              tuiles={[
+                <CamembertAllocation key="camembert" groupes={groupes} />,
+                <GraphiqueRepartitionPatrimoine
+                  key="evolution"
+                  historique={listeHistoriquePatrimoine.map((h) => ({
+                    horodatage: h.horodatage.toISOString(),
+                    type: h.type,
+                    valeur: Number(h.valeur),
+                  }))}
+                />,
+              ]}
+            />
           </Carte>
         </div>
       )}

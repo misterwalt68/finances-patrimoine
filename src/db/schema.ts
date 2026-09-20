@@ -135,6 +135,21 @@ export const cours = pgTable("cours", {
   createdAt: createdAt(),
 });
 
+/**
+ * Photo du patrimoine total par famille (`actifs.type`), prise à chaque
+ * actualisation — sert à tracer l'évolution globale du portefeuille dans le
+ * temps (graphique en barres empilées, patrimoine/graphique-repartition.tsx).
+ * Part de zéro à sa création (décision de Maxime) : jamais reconstruite
+ * rétroactivement depuis l'historique déjà accumulé dans `cours`.
+ */
+export const historiquePatrimoine = pgTable("historique_patrimoine", {
+  id: id(),
+  horodatage: timestamp("horodatage", { withTimezone: true }).notNull(),
+  type: text("type").notNull(),
+  valeur: numeric("valeur", { precision: 14, scale: 2 }).notNull(),
+  createdAt: createdAt(),
+});
+
 export const mouvements = pgTable("mouvements", {
   id: id(),
   compteId: uuid("compte_id")
@@ -316,6 +331,7 @@ export const schema = {
   actifs,
   positions,
   cours,
+  historiquePatrimoine,
   mouvements,
   plansInvestissement,
   categories,
