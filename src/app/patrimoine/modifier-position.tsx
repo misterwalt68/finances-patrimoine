@@ -24,11 +24,16 @@ const MOT_CONFIRMATION = "SUPPRIMER";
  * texte (SupprimerPositionBouton), simplement déplacée dans cette modale à
  * la demande de Maxime plutôt que d'avoir un deuxième bouton sur la ligne.
  */
+const formatEur = (n: number) =>
+  n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export function ModifierPositionBouton({
   position,
   actifLibelle,
   actifType,
   sourcePrix,
+  valeurActuelle,
+  performance,
   listeComptes,
   listeInstitutions,
 }: {
@@ -36,6 +41,9 @@ export function ModifierPositionBouton({
   actifLibelle: string;
   actifType?: string;
   sourcePrix?: string;
+  /** Valeur et performance déjà calculées côté page — juste pour affichage, jamais soumises. */
+  valeurActuelle?: number;
+  performance?: number;
   listeComptes: Compte[];
   listeInstitutions: Institution[];
 }) {
@@ -61,6 +69,9 @@ export function ModifierPositionBouton({
   // (action, ETF, crypto, métal), où ces champs restent utiles.
   const estContexteFixe = estCash || estValeurManuelle;
   const labelPrixRevient = estValeurManuelle ? "Montant investi au total (€)" : "Prix de revient moyen (€, optionnel)";
+
+  const apports = valeurActuelle !== undefined && performance !== undefined ? valeurActuelle - performance : undefined;
+  const performancePct = apports !== undefined && performance !== undefined && apports !== 0 ? (performance / apports) * 100 : null;
 
   const institutionsParId = useMemo(
     () => new Map(listeInstitutions.map((i) => [i.id, i])),
@@ -121,6 +132,20 @@ export function ModifierPositionBouton({
                     ✕
                   </button>
                 </div>
+                {estValeurManuelle && valeurActuelle !== undefined && performance !== undefined && (
+                  <div className="mb-3 rounded-lg border border-line bg-background px-3 py-2">
+                    <p className="text-xs text-muted">Valeur actuelle enregistrée</p>
+                    <p className="flex items-baseline gap-2">
+                      <span className="text-lg font-semibold text-foreground">{formatEur(valeurActuelle)}</span>
+                      <span className={`text-sm ${performance >= 0 ? "text-positive" : "text-negative"}`}>
+                        {performance >= 0 ? "▲" : "▼"}
+                        {performancePct !== null && <> {Math.abs(performancePct).toFixed(2)}% ·</>}{" "}
+                        {performance >= 0 ? "+" : ""}
+                        {formatEur(performance)}
+                      </span>
+                    </p>
+                  </div>
+                )}
                 <form action={lancer} className="space-y-3">
                   <input type="hidden" name="id" value={position.id} />
                   {estContexteFixe ? (
@@ -145,6 +170,18 @@ export function ModifierPositionBouton({
                       required
                     />
                   )}
+                  {estValeurManuelle && (
+                    <Champ
+                      label={estCash ? "Solde actuel (€)" : "Nouvelle valeur actuelle (€)"}
+                      name="valeurActuelle"
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      autoFocus
+                      defaultValue={valeurActuelle !== undefined ? String(valeurActuelle) : (position.prixRevientMoyen ?? "")}
+                      required={estCash}
+                    />
+                  )}
                   {!estCash && (
                     <Champ
                       label={labelPrixRevient}
@@ -153,18 +190,6 @@ export function ModifierPositionBouton({
                       inputMode="decimal"
                       step="any"
                       defaultValue={position.prixRevientMoyen ?? ""}
-                    />
-                  )}
-                  {estValeurManuelle && (
-                    <Champ
-                      label={estCash ? "Solde actuel (€)" : "Valeur actuelle totale (€, optionnel)"}
-                      name="valeurActuelle"
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      placeholder={estCash ? undefined : "Laisser vide si rien de nouveau à signaler"}
-                      defaultValue={estCash ? (position.prixRevientMoyen ?? "") : ""}
-                      required={estCash}
                     />
                   )}
                   <Champ

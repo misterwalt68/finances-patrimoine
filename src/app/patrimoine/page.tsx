@@ -465,7 +465,7 @@ export default async function PagePatrimoine() {
                             <span aria-hidden>⚠</span>
                             {l.joursDepuisMaj === null
                               ? "Jamais mis à jour"
-                              : `Il y a ${l.joursDepuisMaj} jours sans mise à jour`}
+                              : `Dernière mise à jour il y a ${l.joursDepuisMaj} jours`}
                           </p>
                         )}
                         <div className="absolute bottom-2 right-0">
@@ -474,6 +474,8 @@ export default async function PagePatrimoine() {
                             actifLibelle={l.actif?.libelle ?? "cette position"}
                             actifType={l.actif?.type}
                             sourcePrix={l.actif?.sourcePrix}
+                            valeurActuelle={l.calcul?.valeurActuelle}
+                            performance={l.calcul?.performance}
                             listeComptes={listeComptes}
                             listeInstitutions={listeInstitutions}
                           />
