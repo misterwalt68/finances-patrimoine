@@ -11,7 +11,7 @@ import { GraphiqueRepartitionPatrimoine } from "./graphique-repartition";
 import { CarrouselTuiles } from "./carrousel-tuiles";
 import { ModifierPositionBouton } from "./modifier-position";
 import { SelecteurPersonne } from "./selecteur-personne";
-import { TirerPourActualiser } from "./tirer-pour-actualiser";
+import { BoutonActualiser } from "./bouton-actualiser";
 import { IconeActif } from "@/lib/icones-actifs";
 import {
   GraphiqueHistoriqueMetal,
@@ -306,7 +306,6 @@ export default async function PagePatrimoine({
     .filter((a) => a.joursDepuis === null || a.joursDepuis >= PEREMPTION_SEUIL_BANNIERE);
 
   return (
-    <TirerPourActualiser action={actualiserCours}>
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
       <header className="flex items-center justify-between py-6">
         <div>
@@ -317,9 +316,12 @@ export default async function PagePatrimoine({
             Patrimoine
           </h1>
         </div>
-        {personnesTriees.length > 0 && personneActive && (
-          <SelecteurPersonne personnes={personnesTriees} personneActiveId={personneActive.id} />
-        )}
+        <div className="flex items-center gap-2">
+          <BoutonActualiser action={actualiserCours} />
+          {personnesTriees.length > 0 && personneActive && (
+            <SelecteurPersonne personnes={personnesTriees} personneActiveId={personneActive.id} />
+          )}
+        </div>
       </header>
 
       {actifsAVerifier.length > 0 && (
@@ -554,8 +556,6 @@ export default async function PagePatrimoine({
           )}
         </div>
       </div>
-
     </div>
-    </TirerPourActualiser>
   );
 }
