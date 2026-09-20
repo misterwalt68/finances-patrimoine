@@ -108,6 +108,7 @@ export default async function PagePatrimoine({
 
   const actifsParId = new Map(listeActifs.map((a) => [a.id, a]));
   const comptesParId = new Map(listeComptes.map((c) => [c.id, c]));
+  const institutionsParId = new Map(listeInstitutions.map((i) => [i.id, i]));
 
   const dernierCoursParActifId = new Map<string, (typeof listeCours)[number]>();
   for (const c of listeCours) {
@@ -455,6 +456,20 @@ export default async function PagePatrimoine({
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => {
                       const peremption = l.joursDepuisMaj !== undefined ? stylePeremption(l.joursDepuisMaj) : null;
+                      // Le cours (prix/gramme, prix/action…) peut être en
+                      // direct sans que la QUANTITÉ le soit — l'or physique a
+                      // un cours de marché automatique, mais personne ne peut
+                      // lire le nombre de grammes dans un coffre : ça reste
+                      // une saisie humaine, jamais vérifiable automatiquement.
+                      const estCoursAutomatique = l.actif?.sourcePrix !== "manuel";
+                      const nomInstitution = l.compte ? institutionsParId.get(l.compte.institutionId)?.nom : undefined;
+                      const estQuantiteAutomatique =
+                        l.actif?.type === "cash" || (l.actif?.type === "crypto" && nomInstitution === "Coinbase");
+                      const libelleSuivi = !estCoursAutomatique
+                        ? "Manuel"
+                        : estQuantiteAutomatique
+                          ? "Automatique"
+                          : "Cours automatique";
                       return (
                       <li
                         key={l.position.id}
@@ -489,7 +504,7 @@ export default async function PagePatrimoine({
                           <span>
                             · {l.quantite} {uniteQuantite(l.actif?.type)}
                           </span>
-                          <Badge>{l.actif?.sourcePrix === "manuel" ? "Manuel" : "Automatique"}</Badge>
+                          <Badge>{libelleSuivi}</Badge>
                           {l.position.note && <Badge>{l.position.note}</Badge>}
                           {l.position.dateAcquisition && (
                             <Badge>
