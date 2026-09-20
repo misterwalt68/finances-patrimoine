@@ -284,7 +284,12 @@ export default async function PagePatrimoine({
         performance,
         performancePct: apports !== 0 ? (performance / apports) * 100 : null,
       };
-    });
+    })
+    // Liste triée par ordre décroissant de valeur — la plus grosse catégorie
+    // en premier, comme la légende du camembert. Ne change rien à l'ordre
+    // d'empilement du graphique d'évolution (fixe, par entité) : cette liste
+    // n'y est pas liée, chaque affichage garde sa propre logique de tri.
+    .sort((a, b) => b.valeur - a.valeur);
 
   // Rappel "péremption" : tout actif à cours manuel (Livret A, Assurance-
   // vie, PEA…) jamais mis à jour ou pas revu depuis 20 jours — un seuil plus
