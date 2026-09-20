@@ -35,7 +35,7 @@ export async function creerChargeRevenu(formData: FormData) {
 
   await db.insert(chargesRevenusHistorique).values({ chargeRevenuId: charge.id, montant, dateEffet });
 
-  revalidatePath("/budget");
+  revalidatePath("/charges-revenus");
 }
 
 /**
@@ -85,10 +85,10 @@ export async function modifierChargeRevenu(formData: FormData) {
     await db.insert(chargesRevenusHistorique).values({ chargeRevenuId: id, montant, dateEffet });
   }
 
-  revalidatePath("/budget");
+  revalidatePath("/charges-revenus");
 }
 
 export async function supprimerChargeRevenu(id: string) {
   await db.delete(chargesRevenus).where(eq(chargesRevenus.id, id));
-  revalidatePath("/budget");
+  revalidatePath("/charges-revenus");
 }

@@ -57,7 +57,7 @@ export default async function PageAccueil() {
       </Link>
 
       <Link
-        href="/budget"
+        href="/charges-revenus"
         className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 transition-colors active:bg-background"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-accent">
@@ -68,8 +68,8 @@ export default async function PageAccueil() {
           </svg>
         </span>
         <span className="flex-1">
-          <span className="block font-medium text-foreground">Budget</span>
-          <span className="block text-sm text-muted">Revenus et charges fixes du foyer</span>
+          <span className="block font-medium text-foreground">Charges & revenus</span>
+          <span className="block text-sm text-muted">Ce qui rentre et sort chaque mois, en fixe</span>
         </span>
         <span className="text-muted" aria-hidden>
           ›

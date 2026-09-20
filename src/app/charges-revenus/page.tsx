@@ -10,7 +10,7 @@ import { AjouterChargeRevenu } from "./ajouter-charge-revenu";
 // Amélie d'abord, Couple ensuite.
 const PRIORITE_PERSONNE: Record<string, number> = { Maxime: 0, Amélie: 1, Couple: 2 };
 
-export default async function PageBudget() {
+export default async function PageChargesRevenus() {
   const [listeCharges, listeHistorique, listePersonnes] = await Promise.all([
     db.select().from(chargesRevenus).orderBy(chargesRevenus.libelle),
     db.select().from(chargesRevenusHistorique).orderBy(chargesRevenusHistorique.dateEffet),
@@ -58,7 +58,7 @@ export default async function PageBudget() {
         <Link href="/" className="text-sm text-muted transition-colors hover:text-foreground">
           ← Accueil
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Budget</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Charges & revenus</h1>
       </header>
 
       {donneesInsuffisantes ? (
