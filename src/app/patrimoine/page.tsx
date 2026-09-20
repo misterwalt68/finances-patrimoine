@@ -489,6 +489,7 @@ export default async function PagePatrimoine({
                           <span>
                             · {l.quantite} {uniteQuantite(l.actif?.type)}
                           </span>
+                          <Badge>{l.actif?.sourcePrix === "manuel" ? "Manuel" : "Automatique"}</Badge>
                           {l.position.note && <Badge>{l.position.note}</Badge>}
                           {l.position.dateAcquisition && (
                             <Badge>

@@ -357,58 +357,70 @@ async function ajusterSoldeLivretA(): Promise<void> {
     .where(and(eq(institutions.nom, "Boursorama Banque"), eq(comptes.libelle, "Livret A")));
   if (!compteCourant || !compteLivretA) return;
 
-  const [positionLivretA] = await db.select().from(positions).where(eq(positions.compteId, compteLivretA.id));
-  if (!positionLivretA) return; // Livret A pas encore créé dans l'app
+  // Toute la lecture-calcul-écriture tourne dans une transaction avec verrou
+  // sur la position (`for("update")`) : sans ça, deux actualisations qui se
+  // chevauchent (double clic, retry réseau) peuvent chacune lire le même
+  // solde de départ puis écraser le résultat de l'autre avec une valeur déjà
+  // périmée — bug réellement observé (un virement marqué "traité" sans que
+  // son effet sur le solde ait été conservé).
+  await db.transaction(async (tx) => {
+    const [positionLivretA] = await tx
+      .select()
+      .from(positions)
+      .where(eq(positions.compteId, compteLivretA.id))
+      .for("update");
+    if (!positionLivretA) return; // Livret A pas encore créé dans l'app
 
-  const mouvements = await db
-    .select({ id: transactions.id, montant: transactions.montant })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.compteId, compteCourant.id),
-        eq(transactions.statut, "a_categoriser"),
-        ilike(transactions.commercant, "%livret a%"),
-      ),
-    );
-
-  // Un débit du compte courant (montant < 0) part vers le Livret A (+) ;
-  // un crédit (montant > 0) en revient (-) — signe inversé par rapport au
-  // compte courant. Vaut 0 si aucun virement détecté depuis la dernière fois.
-  const ajustement = mouvements.reduce((somme, m) => somme - Number(m.montant), 0);
-
-  const [dernierCours] = await db
-    .select()
-    .from(cours)
-    .where(eq(cours.actifId, positionLivretA.actifId))
-    .orderBy(desc(cours.horodatage))
-    .limit(1);
-  const soldeActuel = dernierCours ? Number(dernierCours.prix) : Number(positionLivretA.prixRevientMoyen ?? 0);
-  const nouveauSolde = soldeActuel + ajustement;
-
-  await db.insert(cours).values({
-    actifId: positionLivretA.actifId,
-    horodatage: new Date(),
-    prix: String(nouveauSolde),
-    source: mouvements.length > 0 ? "estimation_virements" : "estimation_stable",
-  });
-  // Même sémantique que les autres comptes cash : le prix de revient suit
-  // toujours le solde estimé, pour ne jamais afficher de faux gain/perte.
-  await db
-    .update(positions)
-    .set({ prixRevientMoyen: String(nouveauSolde) })
-    .where(eq(positions.id, positionLivretA.id));
-
-  if (mouvements.length > 0) {
-    await db
-      .update(transactions)
-      .set({ statut: "categorise", note: "Virement interne vers/depuis le Livret A — pris en compte automatiquement" })
+    const mouvements = await tx
+      .select({ id: transactions.id, montant: transactions.montant })
+      .from(transactions)
       .where(
-        inArray(
-          transactions.id,
-          mouvements.map((m) => m.id),
+        and(
+          eq(transactions.compteId, compteCourant.id),
+          eq(transactions.statut, "a_categoriser"),
+          ilike(transactions.commercant, "%livret a%"),
         ),
       );
-  }
+
+    // Un débit du compte courant (montant < 0) part vers le Livret A (+) ;
+    // un crédit (montant > 0) en revient (-) — signe inversé par rapport au
+    // compte courant. Vaut 0 si aucun virement détecté depuis la dernière fois.
+    const ajustement = mouvements.reduce((somme, m) => somme - Number(m.montant), 0);
+
+    const [dernierCours] = await tx
+      .select()
+      .from(cours)
+      .where(eq(cours.actifId, positionLivretA.actifId))
+      .orderBy(desc(cours.horodatage))
+      .limit(1);
+    const soldeActuel = dernierCours ? Number(dernierCours.prix) : Number(positionLivretA.prixRevientMoyen ?? 0);
+    const nouveauSolde = soldeActuel + ajustement;
+
+    await tx.insert(cours).values({
+      actifId: positionLivretA.actifId,
+      horodatage: new Date(),
+      prix: String(nouveauSolde),
+      source: mouvements.length > 0 ? "estimation_virements" : "estimation_stable",
+    });
+    // Même sémantique que les autres comptes cash : le prix de revient suit
+    // toujours le solde estimé, pour ne jamais afficher de faux gain/perte.
+    await tx
+      .update(positions)
+      .set({ prixRevientMoyen: String(nouveauSolde) })
+      .where(eq(positions.id, positionLivretA.id));
+
+    if (mouvements.length > 0) {
+      await tx
+        .update(transactions)
+        .set({ statut: "categorise", note: "Virement interne vers/depuis le Livret A — pris en compte automatiquement" })
+        .where(
+          inArray(
+            transactions.id,
+            mouvements.map((m) => m.id),
+          ),
+        );
+    }
+  });
 }
 
 /**
