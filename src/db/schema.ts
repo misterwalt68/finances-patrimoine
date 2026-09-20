@@ -136,15 +136,19 @@ export const cours = pgTable("cours", {
 });
 
 /**
- * Photo du patrimoine total par famille (`actifs.type`), prise à chaque
- * actualisation — sert à tracer l'évolution globale du portefeuille dans le
- * temps (graphique en barres empilées, patrimoine/graphique-repartition.tsx).
- * Part de zéro à sa création (décision de Maxime) : jamais reconstruite
- * rétroactivement depuis l'historique déjà accumulé dans `cours`.
+ * Photo du patrimoine par famille (`actifs.type`) ET par personne, prise à
+ * chaque actualisation — sert à tracer l'évolution du portefeuille dans le
+ * temps (graphique en barres empilées, patrimoine/graphique-repartition.tsx),
+ * filtrable comme le reste de la page (Maxime / Amélie / Couple = somme des
+ * trois). Part de zéro à sa création (décision de Maxime) : jamais
+ * reconstruite rétroactivement depuis l'historique déjà accumulé dans `cours`.
  */
 export const historiquePatrimoine = pgTable("historique_patrimoine", {
   id: id(),
   horodatage: timestamp("horodatage", { withTimezone: true }).notNull(),
+  personneId: uuid("personne_id")
+    .notNull()
+    .references(() => personnes.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   valeur: numeric("valeur", { precision: 14, scale: 2 }).notNull(),
   createdAt: createdAt(),

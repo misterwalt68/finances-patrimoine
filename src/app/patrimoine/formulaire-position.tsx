@@ -134,6 +134,11 @@ export function FormulairePosition({
           <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-muted">
             Aucun actif de ce type pour l&apos;instant — crée-le d&apos;abord dans les réglages.
           </p>
+        ) : listeComptes.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-muted">
+            Cette personne n&apos;a aucun compte pour l&apos;instant — crée-en un dans les réglages, ou
+            change de personne en haut de la page.
+          </p>
         ) : (
           <>
             <ChampSelect label="Actif" name="actifId" required defaultValue="">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
-import { positions, actifs, comptes, institutions, cours, historiquePatrimoine } from "@/db/schema";
+import { positions, actifs, comptes, institutions, cours, historiquePatrimoine, personnes } from "@/db/schema";
 import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { separerApportsEtPerformance } from "@/lib/patrimoine/calculs";
 import { TYPES_ACTIF } from "@/lib/constants";
@@ -11,6 +11,8 @@ import { CamembertAllocation } from "./camembert";
 import { GraphiqueRepartitionPatrimoine } from "./graphique-repartition";
 import { CarrouselTuiles } from "./carrousel-tuiles";
 import { ModifierPositionBouton } from "./modifier-position";
+import { SelecteurPersonne } from "./selecteur-personne";
+import { TirerPourActualiser } from "./tirer-pour-actualiser";
 import { IconeActif } from "@/lib/icones-actifs";
 import {
   GraphiqueHistoriqueMetal,
@@ -19,6 +21,13 @@ import {
   GraphiqueHistoriqueSecurite,
 } from "./graphique-historique";
 import { GraphiqueDepliable } from "./graphique-depliable";
+
+// Ordre d'affichage du sélecteur — pas alphabétique (donnerait Amélie, Couple,
+// Maxime) : Maxime et Amélie d'abord (les deux personnes), Couple ensuite
+// (l'agrégat), et tout futur ajout à la fin.
+const PRIORITE_PERSONNE: Record<string, number> = { Maxime: 0, Amélie: 1, Couple: 2 };
+const trierPersonnes = <T extends { libelle: string }>(liste: T[]): T[] =>
+  [...liste].sort((a, b) => (PRIORITE_PERSONNE[a.libelle] ?? 99) - (PRIORITE_PERSONNE[b.libelle] ?? 99));
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -62,16 +71,40 @@ function stylePeremption(joursDepuis: number | null): { couleur: string; ombre: 
   return { couleur, ombre: `0 0 ${flou}px ${etalement}px hsla(${teinte}, 75%, 55%, ${opacite})` };
 }
 
-export default async function PagePatrimoine() {
-  const [listePositions, listeActifs, listeComptes, listeInstitutions, listeCours, listeHistoriquePatrimoine] =
-    await Promise.all([
-      db.select().from(positions).orderBy(positions.updatedAt),
-      db.select().from(actifs).orderBy(actifs.libelle),
-      db.select().from(comptes).orderBy(comptes.libelle),
-      db.select().from(institutions),
-      db.select().from(cours).orderBy(desc(cours.horodatage)),
-      db.select().from(historiquePatrimoine).orderBy(historiquePatrimoine.horodatage),
-    ]);
+export default async function PagePatrimoine({
+  searchParams,
+}: {
+  searchParams: Promise<{ personne?: string }>;
+}) {
+  const [
+    { personne: personneIdParam },
+    listePositions,
+    listeActifs,
+    listeComptes,
+    listeInstitutions,
+    listeCours,
+    listeHistoriquePatrimoine,
+    listePersonnes,
+  ] = await Promise.all([
+    searchParams,
+    db.select().from(positions).orderBy(positions.updatedAt),
+    db.select().from(actifs).orderBy(actifs.libelle),
+    db.select().from(comptes).orderBy(comptes.libelle),
+    db.select().from(institutions),
+    db.select().from(cours).orderBy(desc(cours.horodatage)),
+    db.select().from(historiquePatrimoine).orderBy(historiquePatrimoine.horodatage),
+    db.select().from(personnes),
+  ]);
+
+  const personnesTriees = trierPersonnes(listePersonnes);
+  // "Couple" par défaut — c'est la vue la plus complète (tout le foyer), la
+  // moins susceptible de faire croire qu'il "manque" du patrimoine au premier
+  // chargement.
+  const personneActive =
+    personnesTriees.find((p) => p.id === personneIdParam) ??
+    personnesTriees.find((p) => p.libelle === "Couple") ??
+    personnesTriees[0];
+  const estCouple = personneActive?.libelle === "Couple";
 
   const actifsParId = new Map(listeActifs.map((a) => [a.id, a]));
   const comptesParId = new Map(listeComptes.map((c) => [c.id, c]));
@@ -87,7 +120,7 @@ export default async function PagePatrimoine() {
   // eslint-disable-next-line react-hooks/purity
   const maintenantMs = Date.now();
 
-  const lignes = listePositions.map((p) => {
+  const lignesToutes = listePositions.map((p) => {
     const actif = actifsParId.get(p.actifId);
     const compte = comptesParId.get(p.compteId);
     const dernierCours = dernierCoursParActifId.get(p.actifId);
@@ -110,6 +143,12 @@ export default async function PagePatrimoine() {
         : undefined;
     return { position: p, actif, compte, dernierCours, calcul, quantite, prixRevientMoyen, joursDepuisMaj };
   });
+
+  // "Couple" affiche tout (Maxime + Amélie + comptes communs) ; Maxime ou
+  // Amélie n'affiche que ses propres comptes, jamais ceux de l'autre ni les
+  // comptes communs — décision explicite de Maxime, pas une agrégation
+  // automatique "parce qu'il en fait partie".
+  const lignes = estCouple ? lignesToutes : lignesToutes.filter((l) => l.compte?.personneId === personneActive?.id);
 
   const totalValeur = lignes.reduce((s, l) => s + (l.calcul?.valeurActuelle ?? 0), 0);
   const totalApports = lignes.reduce(
@@ -261,7 +300,14 @@ export default async function PagePatrimoine() {
     }))
     .filter((a) => a.joursDepuis === null || a.joursDepuis >= PEREMPTION_SEUIL_BANNIERE);
 
+  // Le formulaire d'ajout ne propose que les comptes de la personne
+  // actuellement affichée — pas d'agrégation même pour "Couple", qui n'a que
+  // ses propres comptes communs (ex. Crédit Mutuel) : c'est ce choix qui
+  // détermine à qui la nouvelle ligne est rattachée.
+  const comptesPourAjout = listeComptes.filter((c) => c.personneId === personneActive?.id);
+
   return (
+    <TirerPourActualiser action={actualiserCours}>
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
       <header className="flex items-center justify-between py-6">
         <div>
@@ -272,23 +318,9 @@ export default async function PagePatrimoine() {
             Patrimoine
           </h1>
         </div>
-        <div className="flex items-center gap-2">
-          <form action={actualiserCours}>
-            <button
-              type="submit"
-              className="rounded-full border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:text-foreground"
-            >
-              Actualiser les cours
-            </button>
-          </form>
-          {!donneesInsuffisantes && (
-            <AjouterPosition
-              listeActifs={listeActifs}
-              listeComptes={listeComptes}
-              listeInstitutions={listeInstitutions}
-            />
-          )}
-        </div>
+        {personnesTriees.length > 0 && personneActive && (
+          <SelecteurPersonne personnes={personnesTriees} personneActiveId={personneActive.id} />
+        )}
       </header>
 
       {actifsAVerifier.length > 0 && (
@@ -337,11 +369,14 @@ export default async function PagePatrimoine() {
                 <CamembertAllocation key="camembert" groupes={groupes} />,
                 <GraphiqueRepartitionPatrimoine
                   key="evolution"
-                  historique={listeHistoriquePatrimoine.map((h) => ({
-                    horodatage: h.horodatage.toISOString(),
-                    type: h.type,
-                    valeur: Number(h.valeur),
-                  }))}
+                  historique={listeHistoriquePatrimoine
+                    .filter((h) => estCouple || h.personneId === personneActive?.id)
+                    .map((h) => ({
+                      horodatage: h.horodatage.toISOString(),
+                      personneId: h.personneId,
+                      type: h.type,
+                      valeur: Number(h.valeur),
+                    }))}
                 />,
               ]}
             />
@@ -505,6 +540,17 @@ export default async function PagePatrimoine() {
           )}
         </div>
       </div>
+
+      {!donneesInsuffisantes && (
+        <div className="fixed bottom-6 right-5 z-40">
+          <AjouterPosition
+            listeActifs={listeActifs}
+            listeComptes={comptesPourAjout}
+            listeInstitutions={listeInstitutions}
+          />
+        </div>
+      )}
     </div>
+    </TirerPourActualiser>
   );
 }

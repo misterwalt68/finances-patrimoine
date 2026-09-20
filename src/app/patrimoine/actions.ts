@@ -390,43 +390,47 @@ async function ajusterSoldeLivretA(): Promise<void> {
 }
 
 /**
- * Photo du patrimoine total par famille (`actifs.type`), prise à chaque
- * actualisation — construit au fil du temps l'historique nécessaire au
- * graphique d'évolution globale (patrimoine/graphique-repartition.tsx).
- * Part de zéro à sa création : jamais reconstruite rétroactivement depuis
- * les cours déjà accumulés (décision de Maxime — un historique fabriqué
- * après coup serait faux, l'app n'ayant pas suivi le patrimoine avant).
+ * Photo du patrimoine par famille (`actifs.type`) ET par personne, prise à
+ * chaque actualisation — construit au fil du temps l'historique nécessaire
+ * au graphique d'évolution (patrimoine/graphique-repartition.tsx), filtrable
+ * comme le reste de la page. Part de zéro à sa création : jamais reconstruite
+ * rétroactivement depuis les cours déjà accumulés (décision de Maxime — un
+ * historique fabriqué après coup serait faux, l'app n'ayant pas suivi le
+ * patrimoine avant).
  */
 async function enregistrerSnapshotPatrimoine(): Promise<void> {
-  const [listePositions, listeActifsTous, listeCoursTous] = await Promise.all([
+  const [listePositions, listeActifsTous, listeCoursTous, listeComptesTous] = await Promise.all([
     db.select().from(positions),
     db.select().from(actifs),
     db.select().from(cours).orderBy(desc(cours.horodatage)),
+    db.select().from(comptes),
   ]);
 
   const actifsParId = new Map(listeActifsTous.map((a) => [a.id, a]));
+  const comptesParId = new Map(listeComptesTous.map((c) => [c.id, c]));
   const dernierCoursParActifId = new Map<string, (typeof listeCoursTous)[number]>();
   for (const c of listeCoursTous) {
     if (!dernierCoursParActifId.has(c.actifId)) dernierCoursParActifId.set(c.actifId, c);
   }
 
-  const valeurParType = new Map<string, number>();
+  const valeurParPersonneEtType = new Map<string, number>();
   for (const p of listePositions) {
     const actif = actifsParId.get(p.actifId);
+    const compte = comptesParId.get(p.compteId);
     const dernierCours = actif ? dernierCoursParActifId.get(actif.id) : undefined;
-    if (!actif || !dernierCours) continue;
+    if (!actif || !compte || !dernierCours) continue;
     const valeur = Number(p.quantite) * Number(dernierCours.prix);
-    valeurParType.set(actif.type, (valeurParType.get(actif.type) ?? 0) + valeur);
+    const cle = `${compte.personneId}|${actif.type}`;
+    valeurParPersonneEtType.set(cle, (valeurParPersonneEtType.get(cle) ?? 0) + valeur);
   }
-  if (valeurParType.size === 0) return;
+  if (valeurParPersonneEtType.size === 0) return;
 
   const horodatage = new Date();
   await db.insert(historiquePatrimoine).values(
-    [...valeurParType.entries()].map(([type, valeur]) => ({
-      horodatage,
-      type,
-      valeur: valeur.toFixed(2),
-    })),
+    [...valeurParPersonneEtType.entries()].map(([cle, valeur]) => {
+      const [personneId, type] = cle.split("|");
+      return { horodatage, personneId, type, valeur: valeur.toFixed(2) };
+    }),
   );
 }
 

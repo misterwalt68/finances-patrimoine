@@ -1,0 +1,2 @@
+ALTER TABLE "historique_patrimoine" ADD COLUMN "personne_id" uuid NOT NULL;--> statement-breakpoint
+ALTER TABLE "historique_patrimoine" ADD CONSTRAINT "historique_patrimoine_personne_id_personnes_id_fk" FOREIGN KEY ("personne_id") REFERENCES "public"."personnes"("id") ON DELETE cascade ON UPDATE no action;

@@ -43,6 +43,13 @@
       "when": 1789890292339,
       "tag": "0005_military_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789891623322,
+      "tag": "0006_tired_genesis",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { TYPES_ACTIF } from "@/lib/constants";
 import { COULEURS_PAR_TYPE } from "./camembert";
 
-export type PointHistoriquePatrimoine = { horodatage: string; type: string; valeur: number };
+export type PointHistoriquePatrimoine = { horodatage: string; personneId: string; type: string; valeur: number };
 
 const libelleType = (type: string) => TYPES_ACTIF.find((t) => t.value === type)?.label ?? type;
 
@@ -41,13 +41,16 @@ export function GraphiqueRepartitionPatrimoine({ historique }: { historique: Poi
   const [periodeActive, setPeriodeActive] = useState<string | null>(null);
 
   // Pour chaque période, ne garde que le DERNIER instantané connu par
-  // famille — comme un "cours de clôture", pas la somme de toutes les
-  // actualisations qui sont tombées dans la même période.
+  // (personne, famille) — comme un "cours de clôture", pas la somme de
+  // toutes les actualisations tombées dans la même période. Le total d'une
+  // période/famille est ensuite la somme sur les personnes déjà filtrées en
+  // amont (page.tsx) — "Couple" reçoit Maxime + Amélie + Couple, un
+  // individu ne reçoit que ses propres lignes.
   const { periodes, typesPresents } = useMemo(() => {
     const dernierParCle = new Map<string, { horodatage: number; valeur: number }>();
     for (const point of historique) {
       const date = new Date(point.horodatage);
-      const cleComplete = `${clePeriode(date, granularite)}|${point.type}`;
+      const cleComplete = `${clePeriode(date, granularite)}|${point.personneId}|${point.type}`;
       const t = date.getTime();
       const existant = dernierParCle.get(cleComplete);
       if (!existant || t > existant.horodatage) {
@@ -58,10 +61,10 @@ export function GraphiqueRepartitionPatrimoine({ historique }: { historique: Poi
     const parPeriode = new Map<string, Record<string, number>>();
     const typesVus = new Set<string>();
     for (const [cleComplete, { valeur }] of dernierParCle) {
-      const [cle, type] = cleComplete.split("|");
+      const [cle, , type] = cleComplete.split("|");
       typesVus.add(type);
       const bucket = parPeriode.get(cle) ?? {};
-      bucket[type] = valeur;
+      bucket[type] = (bucket[type] ?? 0) + valeur;
       parPeriode.set(cle, bucket);
     }
 
