@@ -4,10 +4,15 @@ import { createServerClient } from "@supabase/ssr";
 const PUBLIC_PATHS = ["/login", "/auth/callback", "/confidentialite", "/conditions"];
 
 /**
- * Garde d'accès globale — SPEC.md §3 : "un seul compte". Au-delà de la session
- * Supabase valide, on vérifie que l'email correspond à OWNER_EMAIL : un lien
- * magique généré pour une autre adresse ne donne jamais accès à l'app.
+ * Garde d'accès globale — foyer à deux (Maxime + Amélie), jamais un compte
+ * tiers. Au-delà de la session Supabase valide, on vérifie que l'email
+ * figure dans OWNER_EMAILS (liste séparée par des virgules) : un compte créé
+ * pour une autre adresse ne donne jamais accès à l'app.
  */
+const emailsAutorises = (process.env.OWNER_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 export async function proxy(request: NextRequest) {
   // Auth désactivée temporairement en dev pour débloquer le développement
   // (envois d'email limités le temps de finaliser la config Supabase).
@@ -49,7 +54,7 @@ export async function proxy(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some((path) =>
     request.nextUrl.pathname.startsWith(path),
   );
-  const isAuthorized = !!user && user.email === process.env.OWNER_EMAIL;
+  const isAuthorized = !!user && !!user.email && emailsAutorises.includes(user.email.toLowerCase());
 
   if (!isAuthorized && !isPublicPath) {
     const url = request.nextUrl.clone();

@@ -40,7 +40,7 @@ npm run db:studio     # interface web pour inspecter les données
 npm run dev
 ```
 
-Ouvre [http://localhost:3000](http://localhost:3000). Le premier écran demande une connexion par lien magique — seule l'adresse définie dans `OWNER_EMAIL` (.env.local) est autorisée.
+Ouvre [http://localhost:3000](http://localhost:3000). Le premier écran demande un email + mot de passe — seules les adresses listées dans `OWNER_EMAILS` (.env.local, séparées par des virgules) sont autorisées.
 
 ## Où en est le projet
 
