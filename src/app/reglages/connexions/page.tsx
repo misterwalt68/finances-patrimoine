@@ -59,16 +59,14 @@ export default async function PageConnexions({
       </div>
 
       <Carte>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium text-foreground">Connexion bancaire (DSP2)</p>
-            <p className="mt-1 text-sm text-muted">
-              {EB_SANDBOX
-                ? "Mode développement — connecte la banque de test, jamais une vraie banque."
-                : "Redirige vers ta banque pour autoriser la lecture de tes comptes."}
-            </p>
-          </div>
-          <form action={connecterBanque} className="flex shrink-0 gap-2">
+        <div>
+          <p className="font-medium text-foreground">Connexion bancaire (DSP2)</p>
+          <p className="mt-1 text-sm text-muted">
+            {EB_SANDBOX
+              ? "Mode développement — connecte la banque de test, jamais une vraie banque."
+              : "Redirige vers ta banque pour autoriser la lecture de tes comptes."}
+          </p>
+          <form action={connecterBanque} className="mt-3 flex flex-wrap items-end gap-2">
             <select
               name="banque"
               defaultValue="boursobank"
@@ -80,13 +78,23 @@ export default async function PageConnexions({
                 </option>
               ))}
             </select>
+            <input
+              type="text"
+              name="libelle"
+              placeholder="Nom si déjà connectée (ex. Crédit Mutuel Amélie)"
+              className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-foreground placeholder:text-muted"
+            />
             <button
               type="submit"
-              className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
+              className="h-10 shrink-0 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground"
             >
               Connecter{EB_SANDBOX ? " (test)" : ""}
             </button>
           </form>
+          <p className="mt-1.5 text-xs text-muted">
+            Laisse vide sauf si cette banque est déjà connectée pour quelqu&apos;un d&apos;autre — dans ce
+            cas, donne un nom différent pour ne pas remplacer la première connexion.
+          </p>
         </div>
 
         {banquesConnectees.length > 0 && (

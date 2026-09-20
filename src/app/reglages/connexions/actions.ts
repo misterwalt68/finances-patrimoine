@@ -14,17 +14,24 @@ const NOM_COOKIE_STATE = "eb_state";
  * est stocké dans un cookie httpOnly le temps de l'aller-retour, pour
  * vérifier au retour que la réponse correspond bien à cette tentative
  * (protection CSRF standard du flux d'autorisation).
+ *
+ * `libelle` (optionnel) accompagne le state dans le même cookie — sert à
+ * distinguer deux connexions vers la même banque (ex. le Crédit Mutuel de
+ * Maxime et celui d'Amélie) : sans ça, le callback matcherait les deux par
+ * le même nom d'établissement et la seconde connexion écraserait la
+ * première (session, comptes détectés, date d'expiration du consentement).
  */
 export async function connecterBanque(formData: FormData) {
   const banque = formData.get("banque");
   if (typeof banque !== "string" || !(banque in ASPSP_PAR_BANQUE)) {
     throw new Error("Banque inconnue");
   }
+  const libelle = String(formData.get("libelle") ?? "").trim();
 
   const state = randomUUID();
 
   const cookieStore = await cookies();
-  cookieStore.set(NOM_COOKIE_STATE, state, {
+  cookieStore.set(NOM_COOKIE_STATE, JSON.stringify({ state, libelle: libelle || null }), {
     httpOnly: true,
     secure: true,
     sameSite: "lax",

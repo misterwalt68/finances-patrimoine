@@ -21,8 +21,21 @@ export async function GET(request: NextRequest) {
   const erreurRecue = request.nextUrl.searchParams.get("error");
 
   const cookieStore = await cookies();
-  const stateAttendu = cookieStore.get(NOM_COOKIE_STATE)?.value;
+  const cookieBrut = cookieStore.get(NOM_COOKIE_STATE)?.value;
   cookieStore.delete(NOM_COOKIE_STATE);
+
+  // Rétrocompatible avec un cookie qui ne contiendrait que le state brut
+  // (ancien format) — évite de casser une tentative de connexion en cours
+  // pendant le déploiement de ce changement.
+  let stateAttendu: string | undefined;
+  let libelle: string | null = null;
+  try {
+    const parsed = cookieBrut ? JSON.parse(cookieBrut) : null;
+    stateAttendu = parsed?.state;
+    libelle = parsed?.libelle ?? null;
+  } catch {
+    stateAttendu = cookieBrut;
+  }
 
   if (erreurRecue || !code || !stateRecu || stateRecu !== stateAttendu) {
     return NextResponse.redirect(`${site}/reglages/connexions?enable_banking=erreur`);
@@ -30,11 +43,17 @@ export async function GET(request: NextRequest) {
 
   try {
     const session = await creerSession({ code, sandbox: EB_SANDBOX });
+    // Nom de l'établissement à créer/mettre à jour — celui de la banque par
+    // défaut, ou le libellé distinctif choisi au démarrage de la connexion
+    // (cf. connecterBanque) pour ne jamais confondre deux connexions vers la
+    // même banque sous des identités différentes (ex. Crédit Mutuel de
+    // Maxime vs Crédit Mutuel d'Amélie).
+    const nomInstitution = libelle || session.aspspNom;
 
     const [institutionExistante] = await db
       .select()
       .from(institutions)
-      .where(eq(institutions.nom, session.aspspNom));
+      .where(eq(institutions.nom, nomInstitution));
 
     if (institutionExistante) {
       await db
@@ -49,7 +68,7 @@ export async function GET(request: NextRequest) {
         .where(eq(institutions.id, institutionExistante.id));
     } else {
       await db.insert(institutions).values({
-        nom: session.aspspNom,
+        nom: nomInstitution,
         type: "banque",
         methodeConnexion: "psd2",
         consentementEtat: "actif",
