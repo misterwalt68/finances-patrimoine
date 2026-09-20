@@ -11,6 +11,7 @@ import { CamembertAllocation } from "./camembert";
 import { ModifierPositionBouton } from "./modifier-position";
 import { IconeActif } from "@/lib/icones-actifs";
 import { GraphiqueHistoriqueMetal, GraphiqueHistoriqueComptes, GraphiqueHistoriqueFonds } from "./graphique-historique";
+import { GraphiqueDepliable } from "./graphique-depliable";
 
 // Arrondi (0 décimale) — réservé aux totaux (carte "Valeur totale", camembert,
 // total par famille) : plus lisible en un coup d'œil.
@@ -333,10 +334,14 @@ export default async function PagePatrimoine() {
                     />
                   )}
                   {groupe.type === "cash" && comptesGraphique.length > 0 && (
-                    <GraphiqueHistoriqueComptes comptes={comptesGraphique} coursParActif={coursParActifCash} />
+                    <GraphiqueDepliable>
+                      <GraphiqueHistoriqueComptes comptes={comptesGraphique} coursParActif={coursParActifCash} />
+                    </GraphiqueDepliable>
                   )}
                   {groupe.type === "fonds" && fondsGraphique.length > 0 && (
-                    <GraphiqueHistoriqueFonds fonds={fondsGraphique} coursParActif={coursParActifFonds} />
+                    <GraphiqueDepliable>
+                      <GraphiqueHistoriqueFonds fonds={fondsGraphique} coursParActif={coursParActifFonds} />
+                    </GraphiqueDepliable>
                   )}
                   <ul className="divide-y divide-line border-t border-line px-4">
                     {groupe.lignes.map((l) => (
