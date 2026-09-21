@@ -73,6 +73,13 @@ export function TrieurDepenses({
   const debut = useRef<{ x: number; y: number } | null>(null);
   const ciblesRef = useRef(new Map<string, HTMLElement>());
   const minuteurSaisie = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Le dernier pointeur reçu et une mise à jour d'état au plus une fois par
+  // frame — sur mobile, le pointeur peut envoyer des événements bien plus
+  // vite que l'écran ne rafraîchit, et déclencher un setState (donc un
+  // rendu de toute la pile + des bulles) à chaque événement était la cause
+  // des lags/saccades signalés pendant le glissement.
+  const pointeurActuel = useRef<{ x: number; y: number } | null>(null);
+  const frameEnAttente = useRef<number | null>(null);
 
   function annulerMinuteurSaisie() {
     if (minuteurSaisie.current) {
@@ -93,6 +100,10 @@ export function TrieurDepenses({
     if (creationPour) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     debut.current = { x: e.clientX, y: e.clientY };
+    if (frameEnAttente.current !== null) {
+      cancelAnimationFrame(frameEnAttente.current);
+      frameEnAttente.current = null;
+    }
     setEnTirage(true);
     setEnSaisie(false);
     annulerMinuteurSaisie();
@@ -105,21 +116,27 @@ export function TrieurDepenses({
 
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
     if (!enTirage || !debut.current) return;
-    const dx = e.clientX - debut.current.x;
-    const dy = e.clientY - debut.current.y;
-    setOffset({ x: dx, y: dy });
-    const distance = Math.hypot(dx, dy);
-    // Un mouvement franc avant même la fin du délai vaut aussi pour un
-    // glissement volontaire — pas besoin d'attendre le minuteur.
-    if (distance > SEUIL_TAP && minuteurSaisie.current) {
-      annulerMinuteurSaisie();
-      setEnSaisie(true);
-    }
-    if (distance < SEUIL_DEPOT) {
-      setSurvole(null);
-      return;
-    }
-    setSurvole(trouverCible(e.clientX, e.clientY));
+    pointeurActuel.current = { x: e.clientX, y: e.clientY };
+    if (frameEnAttente.current !== null) return; // une mise à jour est déjà planifiée pour cette frame
+    frameEnAttente.current = requestAnimationFrame(() => {
+      frameEnAttente.current = null;
+      if (!pointeurActuel.current || !debut.current) return;
+      const dx = pointeurActuel.current.x - debut.current.x;
+      const dy = pointeurActuel.current.y - debut.current.y;
+      setOffset({ x: dx, y: dy });
+      const distance = Math.hypot(dx, dy);
+      // Un mouvement franc avant même la fin du délai vaut aussi pour un
+      // glissement volontaire — pas besoin d'attendre le minuteur.
+      if (distance > SEUIL_TAP && minuteurSaisie.current) {
+        annulerMinuteurSaisie();
+        setEnSaisie(true);
+      }
+      if (distance < SEUIL_DEPOT) {
+        setSurvole(null);
+        return;
+      }
+      setSurvole(trouverCible(pointeurActuel.current.x, pointeurActuel.current.y));
+    });
   }
 
   async function deposerSur(cible: string, transaction: TransactionLegere) {
@@ -155,11 +172,21 @@ export function TrieurDepenses({
 
   function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
     if (!enTirage) return;
+    if (frameEnAttente.current !== null) {
+      cancelAnimationFrame(frameEnAttente.current);
+      frameEnAttente.current = null;
+    }
     setEnTirage(false);
     annulerMinuteurSaisie();
+    // Calculé depuis la position réelle du relâchement plutôt que depuis
+    // `offset` (mis à jour au plus une fois par frame) — sinon un dépôt au
+    // tout dernier instant pourrait se baser sur une position d'un cran en
+    // retard.
+    const dx = debut.current ? e.clientX - debut.current.x : offset.x;
+    const dy = debut.current ? e.clientY - debut.current.y : offset.y;
     debut.current = null;
     const transaction = pile[0];
-    const distance = Math.hypot(offset.x, offset.y);
+    const distance = Math.hypot(dx, dy);
     const cible = distance >= SEUIL_DEPOT ? trouverCible(e.clientX, e.clientY) : null;
     const etaitEnSaisie = enSaisie;
     setSurvole(null);
@@ -227,11 +254,18 @@ export function TrieurDepenses({
   const CARTE_H = 88; // hauteur d'une carte (px) — moins haute, plus longue que la version précédente
   const REVELATION = 42; // décalage vertical entre deux cartes empilées (px)
   const NB_CARTES_VISIBLES = 6;
-  // Plus une carte est profonde dans la pile, plus elle "s'éloigne" — échelle
-  // et opacité réduisent progressivement, comme un vrai empilement vu en
-  // perspective plutôt qu'un simple décalage plat.
+  // Position de base de la carte du dessus dans le bloc : en bas, pas en
+  // haut — les cartes plus profondes se révèlent au-dessus d'elle, si bien
+  // que quand l'une d'elles est promue au premier plan, elle descend vers
+  // sa nouvelle place plutôt que de remonter.
+  const DECALAGE_BASE = (NB_CARTES_VISIBLES - 1) * REVELATION;
+  // Plus une carte est profonde dans la pile, plus elle "s'éloigne" —
+  // l'échelle réduit et sa couleur se mélange de plus en plus avec le fond
+  // (pas une histoire d'opacité, qui laisserait deviner ce qu'il y a
+  // dessous : un vrai fondu de teinte, comme si la carte se fondait dans le
+  // fond de l'écran).
   const PROFONDEUR_ECHELLE = [1, 0.96, 0.92, 0.88, 0.84, 0.8];
-  const PROFONDEUR_OPACITE = [1, 0.8, 0.62, 0.46, 0.33, 0.22];
+  const PROFONDEUR_FONDU = [0, 0.25, 0.45, 0.6, 0.72, 0.82];
 
   return (
     <div>
@@ -264,11 +298,11 @@ export function TrieurDepenses({
        * Pile en éventail façon maquette de référence : chaque carte derrière
        * la première est décalée verticalement (reste lisible : commerçant,
        * date, montant) avec une variation d'alignement (léger décalage
-       * horizontal + rotation) pour casser l'effet "file indienne". Seule la
-       * carte du dessus est saisissable et affiche poignée + loupe. Pendant
-       * la saisie, les autres cartes s'estompent (opacité) plutôt que de se
-       * flouter — c'est ce contraste, plus une lueur renforcée sur la carte
-       * transportée, qui la démarque du reste.
+       * horizontal + rotation) pour casser l'effet "file indienne". La carte
+       * du dessus est ancrée en bas du bloc — les suivantes se révèlent
+       * au-dessus, si bien que promouvoir la prochaine carte la fait
+       * descendre vers l'avant plutôt que remonter. Seule la carte du
+       * dessus est saisissable et affiche la loupe.
        */}
       <div
         className="relative mx-auto mt-6 max-w-xs select-none"
@@ -288,11 +322,20 @@ export function TrieurDepenses({
               const estLaCarteDuDessus = profondeur === 0;
               const eventail = EVENTAIL[profondeur] ?? EVENTAIL[EVENTAIL.length - 1];
               const echelleProfondeur = PROFONDEUR_ECHELLE[profondeur] ?? PROFONDEUR_ECHELLE[PROFONDEUR_ECHELLE.length - 1];
-              const opaciteProfondeur = PROFONDEUR_OPACITE[profondeur] ?? PROFONDEUR_OPACITE[PROFONDEUR_OPACITE.length - 1];
+              const fonduProfondeur = PROFONDEUR_FONDU[profondeur] ?? PROFONDEUR_FONDU[PROFONDEUR_FONDU.length - 1];
+              // Pendant la saisie, les autres cartes se fondent davantage
+              // dans le fond (même mécanisme que le fondu de profondeur,
+              // juste poussé plus loin) pour démarquer celle qu'on tient.
+              const fondu = estLaCarteDuDessus ? 0 : enSaisie ? Math.max(fonduProfondeur, 0.75) : fonduProfondeur;
               // Arrivée sur une bulle en glissant : la carte tenue réduit
               // jusqu'à quasi disparaître (comme absorbée par la bulle),
               // qui elle-même grandit déjà via son propre style survolé.
               const surUneCible = estLaCarteDuDessus && enTirage && survole !== null;
+              // Décalage vertical au repos : la carte du dessus reste en bas
+              // du bloc, les suivantes se révèlent au-dessus d'elle.
+              const decalageRepos = estLaCarteDuDessus
+                ? DECALAGE_BASE
+                : (NB_CARTES_VISIBLES - 1 - profondeur) * REVELATION;
               return (
                 <div
                   key={t.id}
@@ -300,19 +343,29 @@ export function TrieurDepenses({
                   onPointerMove={estLaCarteDuDessus ? onPointerMove : undefined}
                   onPointerUp={estLaCarteDuDessus ? onPointerUp : undefined}
                   className={`absolute left-1/2 top-0 w-[95%] overflow-hidden rounded-2xl border bg-surface ${
-                    estLaCarteDuDessus ? (enSaisie ? "glow-tri-actif" : "glow-tri") : "border-line shadow-xl shadow-black/50"
+                    estLaCarteDuDessus ? (enSaisie ? "glow-tri-actif" : "glow-tri") : "shadow-xl shadow-black/50"
                   }`}
                   style={{
                     height: CARTE_H,
                     zIndex: 10 - profondeur,
-                    opacity: surUneCible ? 0.15 : estLaCarteDuDessus ? 1 : enSaisie ? opaciteProfondeur * 0.5 : opaciteProfondeur,
+                    borderColor: estLaCarteDuDessus
+                      ? undefined
+                      : `color-mix(in srgb, var(--line) ${(1 - fondu) * 100}%, var(--background) ${fondu * 100}%)`,
                     transform: estLaCarteDuDessus
-                      ? `translate(-50%, 0) translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg) scale(${surUneCible ? 0.08 : 1})`
-                      : `translate(-50%, ${profondeur * REVELATION}px) translate(${eventail.x}px, 0) rotate(${eventail.r}deg) scale(${echelleProfondeur})`,
+                      ? `translate(-50%, ${decalageRepos}px) translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg) scale(${surUneCible ? 0.08 : 1})`
+                      : `translate(-50%, ${decalageRepos}px) translate(${eventail.x}px, 0) rotate(${eventail.r}deg) scale(${echelleProfondeur})`,
+                    willChange: estLaCarteDuDessus && enTirage ? "transform" : undefined,
+                    // Pas de transition sur `transform` pendant un
+                    // glissement normal : la carte doit suivre le doigt au
+                    // pixel près, sans lag d'interpolation. Elle ne
+                    // réapparaît que pour l'effet d'absorption (arrivée sur
+                    // une bulle) et au repos (retour en place, promotion).
                     transition:
-                      enTirage && estLaCarteDuDessus
-                        ? "transform 0.2s ease-out, opacity 0.2s ease-out"
-                        : "transform 0.25s ease-out, opacity 0.25s ease-out",
+                      estLaCarteDuDessus && enTirage
+                        ? survole
+                          ? "transform 0.2s ease-out"
+                          : "none"
+                        : "transform 0.25s ease-out",
                     touchAction: "none",
                     cursor: estLaCarteDuDessus ? "grab" : undefined,
                   }}
@@ -321,13 +374,12 @@ export function TrieurDepenses({
                     className={
                       estLaCarteDuDessus
                         ? "flex h-full items-center gap-3 p-4"
-                        : // Cartes derrière la première : seul le bas de leur
+                        : // Cartes derrière la première : seul le haut de leur
                           // boîte dépasse de sous la carte du dessus (celle-ci
-                          // les recouvre à mesure qu'on s'enfonce dans la
-                          // pile) — le contenu est donc ancré en bas, pas
-                          // centré, sinon il resterait caché sous la carte de
-                          // devant.
-                          "absolute inset-x-0 bottom-0 flex items-center gap-3 p-4"
+                          // les recouvre par en dessous, la pile se révélant
+                          // vers le haut) — le contenu est donc ancré en haut,
+                          // pas centré, sinon il resterait caché.
+                          "absolute inset-x-0 top-0 flex items-center gap-3 p-4"
                     }
                   >
                     <IconeAvatar />
@@ -356,6 +408,17 @@ export function TrieurDepenses({
                       )}
                     </div>
                   </div>
+                  {!estLaCarteDuDessus && (
+                    // Fondu vers la couleur du fond plutôt qu'une opacité :
+                    // une couche du fond posée par-dessus tout le contenu,
+                    // de plus en plus opaque avec la profondeur — la carte a
+                    // l'air de se fondre dans l'écran, pas de devenir
+                    // transparente sur ce qu'il y a derrière.
+                    <div
+                      className="pointer-events-none absolute inset-0 transition-opacity duration-200"
+                      style={{ backgroundColor: "var(--background)", opacity: fondu }}
+                    />
+                  )}
                 </div>
               );
             })
