@@ -18,6 +18,7 @@ type CategorieAvecTransactions = {
 };
 
 const CIBLE_AJOUTER = "__ajouter__";
+const CIBLE_PLUS_TARD = "__plus_tard__";
 const SEUIL_DEPOT = 70; // px de tirage avant qu'une catégorie soit considérée comme ciblée
 const SEUIL_TAP = 8; // px de mouvement max pour qu'un relâchement compte comme un tap, pas un glissement
 const DELAI_BULLE = 200; // ms d'appui avant que la carte se rétracte en bulle
@@ -112,6 +113,17 @@ export function TrieurDepenses({
       setPile((p) => p.filter((t) => t.id !== transaction.id));
       setOffset({ x: 0, y: 0 });
       setCreationPour(transaction);
+      return;
+    }
+    if (cible === CIBLE_PLUS_TARD) {
+      // Ni catégorisée ni renvoyée en base — juste repoussée en fin de pile
+      // pour voir les suivantes, purement côté client (rien à retenir d'une
+      // session à l'autre).
+      setPile((p) => {
+        const [premiere, ...reste] = p;
+        return premiere ? [...reste, premiere] : p;
+      });
+      setOffset({ x: 0, y: 0 });
       return;
     }
     setPile((p) => p.filter((t) => t.id !== transaction.id));
@@ -231,7 +243,13 @@ export function TrieurDepenses({
                       : estLaCarteDuDessus
                         ? `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
                         : `translateY(${profondeur * 16}px) scale(${1 - profondeur * 0.05})`,
-                    transition: enTirage && estLaCarteDuDessus ? "none" : "transform 0.25s ease-out",
+                    // Une fois la carte du dessus rétractée en bulle, celle
+                    // juste derrière devient visible d'un coup — la flouter
+                    // rappelle qu'elle n'est pas celle qu'on est en train de
+                    // ranger, sans la cacher complètement.
+                    filter: enBulle && profondeur === 1 ? "blur(5px)" : undefined,
+                    transition:
+                      enTirage && estLaCarteDuDessus ? "filter 0.15s ease-out" : "transform 0.25s ease-out, filter 0.15s ease-out",
                     touchAction: "none",
                     cursor: estLaCarteDuDessus ? "grab" : undefined,
                   }}
@@ -286,16 +304,29 @@ export function TrieurDepenses({
         ))}
       </div>
 
-      <div
-        ref={(el) => {
-          if (el) ciblesRef.current.set(CIBLE_AJOUTER, el);
-          else ciblesRef.current.delete(CIBLE_AJOUTER);
-        }}
-        className={`mx-auto mt-4 flex h-12 w-fit items-center gap-2 rounded-full border border-dashed px-4 text-sm transition-colors ${
-          survole === CIBLE_AJOUTER ? "border-accent text-accent" : "border-line text-muted"
-        }`}
-      >
-        <span aria-hidden>+</span> Ajouter une catégorie
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <div
+          ref={(el) => {
+            if (el) ciblesRef.current.set(CIBLE_AJOUTER, el);
+            else ciblesRef.current.delete(CIBLE_AJOUTER);
+          }}
+          className={`flex h-12 w-fit items-center gap-2 rounded-full border border-dashed px-4 text-sm transition-colors ${
+            survole === CIBLE_AJOUTER ? "border-accent text-accent" : "border-line text-muted"
+          }`}
+        >
+          <span aria-hidden>+</span> Ajouter une catégorie
+        </div>
+        <div
+          ref={(el) => {
+            if (el) ciblesRef.current.set(CIBLE_PLUS_TARD, el);
+            else ciblesRef.current.delete(CIBLE_PLUS_TARD);
+          }}
+          className={`flex h-12 w-fit items-center gap-2 rounded-full border border-dashed px-4 text-sm transition-colors ${
+            survole === CIBLE_PLUS_TARD ? "border-accent text-accent" : "border-line text-muted"
+          }`}
+        >
+          <span aria-hidden>↻</span> Trier plus tard
+        </div>
       </div>
 
       {creationPour && (
