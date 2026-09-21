@@ -42,18 +42,151 @@ export const SOURCES_PRIX = [
   { value: "manuel", label: "Manuel" },
 ] as const;
 
+/**
+ * Large éventail volontaire (une centaine) pour que créer une catégorie ne
+ * tombe jamais en panne d'icône pertinente — demande explicite de Maxime
+ * après avoir buté sur "Épargne". `value` est la clé stockée en base
+ * (jamais renommée sans migration) ; le tracé réel vient de lucide-react
+ * (src/lib/icones-categorie.tsx), pas dessiné à la main.
+ */
 export const ICONES_CATEGORIE = [
+  // Alimentation
   { value: "courses", label: "Courses" },
+  { value: "epicerie", label: "Épicerie" },
   { value: "restaurant", label: "Restaurant" },
-  { value: "transport", label: "Transport" },
+  { value: "cafe", label: "Café" },
+  { value: "bar", label: "Bar" },
+  { value: "vin", label: "Vin" },
+  { value: "fast_food", label: "Fast-food" },
+  { value: "dessert", label: "Dessert" },
+  { value: "boulangerie", label: "Boulangerie" },
+
+  // Maison
   { value: "maison", label: "Maison" },
+  { value: "loyer", label: "Loyer" },
+  { value: "bricolage", label: "Bricolage" },
+  { value: "outils", label: "Outils" },
+  { value: "peinture", label: "Peinture" },
+  { value: "electricite", label: "Électricité" },
+  { value: "eau", label: "Eau" },
+  { value: "gaz", label: "Gaz" },
+  { value: "mobilier", label: "Mobilier" },
+  { value: "literie", label: "Literie" },
+  { value: "salle_de_bain", label: "Salle de bain" },
+  { value: "jardin", label: "Jardin" },
+  { value: "plantes", label: "Plantes" },
+  { value: "arbres", label: "Arbres" },
+
+  // Transport
+  { value: "transport", label: "Transport" },
+  { value: "essence", label: "Essence" },
+  { value: "bus", label: "Bus" },
+  { value: "train", label: "Train" },
+  { value: "avion", label: "Avion" },
+  { value: "velo", label: "Vélo" },
+  { value: "parking", label: "Parking" },
+  { value: "bateau", label: "Bateau" },
+  { value: "camion", label: "Déménagement" },
+  { value: "peage", label: "Péage" },
+
+  // Vêtements & beauté
   { value: "vetements", label: "Vêtements" },
+  { value: "chaussures", label: "Chaussures" },
+  { value: "coiffeur", label: "Coiffeur" },
+  { value: "bijoux", label: "Bijoux" },
+  { value: "lunettes", label: "Lunettes" },
+  { value: "montre", label: "Montre" },
+
+  // Loisirs & culture
   { value: "loisirs", label: "Loisirs" },
+  { value: "musique", label: "Musique" },
+  { value: "cinema", label: "Cinéma" },
+  { value: "lecture", label: "Lecture" },
+  { value: "spectacle", label: "Spectacle" },
+  { value: "jeux", label: "Jeux" },
+  { value: "art", label: "Art" },
+  { value: "photo", label: "Photo" },
+  { value: "tele", label: "Télé" },
+  { value: "podcast", label: "Podcast" },
+  { value: "fete", label: "Fête" },
+  { value: "concert", label: "Concert" },
+
+  // Santé & bien-être
   { value: "sante", label: "Santé" },
+  { value: "pharmacie", label: "Pharmacie" },
+  { value: "medecin", label: "Médecin" },
+  { value: "soins", label: "Soins" },
+  { value: "sport", label: "Sport" },
+  { value: "bienetre", label: "Bien-être" },
+  { value: "mental", label: "Santé mentale" },
+
+  // Abonnements & technologie
   { value: "abonnement", label: "Abonnement" },
+  { value: "telephone", label: "Téléphone" },
+  { value: "internet", label: "Internet" },
+  { value: "informatique", label: "Informatique" },
+  { value: "streaming", label: "Streaming" },
+  { value: "presse", label: "Presse" },
+  { value: "cloud", label: "Stockage en ligne" },
+
+  // Énergie
   { value: "energie", label: "Énergie" },
+  { value: "solaire", label: "Solaire" },
+  { value: "batterie", label: "Batterie" },
+
+  // Voyage
   { value: "voyage", label: "Voyage" },
+  { value: "camping", label: "Camping" },
+  { value: "montagne", label: "Montagne" },
+  { value: "plage", label: "Plage" },
+  { value: "monde", label: "International" },
+  { value: "itineraire", label: "Itinéraire" },
+  { value: "boussole", label: "Exploration" },
+
+  // Cadeaux
   { value: "cadeau", label: "Cadeau" },
+
+  // Épargne & finance
+  { value: "epargne", label: "Épargne" },
+  { value: "portefeuille", label: "Portefeuille" },
+  { value: "carte_bancaire", label: "Carte bancaire" },
+  { value: "pieces", label: "Pièces" },
+  { value: "billets", label: "Billets" },
+  { value: "investissement", label: "Investissement" },
+  { value: "banque", label: "Banque" },
+  { value: "don", label: "Don" },
+  { value: "facture", label: "Facture" },
+
+  // Éducation & enfants
+  { value: "education", label: "Éducation" },
+  { value: "fournitures", label: "Fournitures scolaires" },
+  { value: "cartable", label: "Cartable" },
+  { value: "bebe", label: "Bébé" },
+  { value: "jouets", label: "Jouets" },
+
+  // Animaux
+  { value: "animaux", label: "Animaux" },
+  { value: "chat", label: "Chat" },
+  { value: "veterinaire", label: "Vétérinaire" },
+
+  // Travail & administratif
+  { value: "travail", label: "Travail" },
+  { value: "documents", label: "Documents" },
+  { value: "entreprise", label: "Entreprise" },
+  { value: "courrier", label: "Courrier" },
+  { value: "impression", label: "Impression" },
+  { value: "impots", label: "Impôts" },
+
+  // Sport
+  { value: "natation", label: "Natation" },
+  { value: "trophee", label: "Compétition" },
+  { value: "cible", label: "Objectif" },
+
+  // Divers
+  { value: "assurance", label: "Assurance" },
+  { value: "parapluie", label: "Imprévu" },
+  { value: "etiquette", label: "Étiquette" },
+  { value: "favori", label: "Favori" },
   { value: "autre", label: "Autre" },
 ] as const;
 
