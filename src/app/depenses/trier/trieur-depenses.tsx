@@ -19,6 +19,8 @@ type CategorieAvecTransactions = {
 
 const CIBLE_AJOUTER = "__ajouter__";
 const SEUIL_DEPOT = 70; // px de tirage avant qu'une catégorie soit considérée comme ciblée
+const SEUIL_TAP = 8; // px de mouvement max pour qu'un relâchement compte comme un tap, pas un glissement
+const DELAI_BULLE = 200; // ms d'appui avant que la carte se rétracte en bulle
 
 const formatEur = (n: number) =>
   n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,12 +51,22 @@ export function TrieurDepenses({
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [enTirage, setEnTirage] = useState(false);
+  const [enBulle, setEnBulle] = useState(false);
   const [survole, setSurvole] = useState<string | null>(null);
   const [categorieOuverte, setCategorieOuverte] = useState<CategorieAvecTransactions | null>(null);
   const [creationPour, setCreationPour] = useState<TransactionLegere | null>(null);
+  const [detailOuvert, setDetailOuvert] = useState<TransactionLegere | null>(null);
 
   const debut = useRef<{ x: number; y: number } | null>(null);
   const ciblesRef = useRef(new Map<string, HTMLElement>());
+  const minuteurBulle = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function annulerMinuteurBulle() {
+    if (minuteurBulle.current) {
+      clearTimeout(minuteurBulle.current);
+      minuteurBulle.current = null;
+    }
+  }
 
   function trouverCible(x: number, y: number): string | null {
     for (const [id, el] of ciblesRef.current) {
@@ -69,6 +81,11 @@ export function TrieurDepenses({
     e.currentTarget.setPointerCapture(e.pointerId);
     debut.current = { x: e.clientX, y: e.clientY };
     setEnTirage(true);
+    setEnBulle(false);
+    annulerMinuteurBulle();
+    // Un appui maintenu, même sans bouger, rétracte la carte en bulle — pas
+    // besoin de glisser pour déclencher le mode "transport", juste tenir.
+    minuteurBulle.current = setTimeout(() => setEnBulle(true), DELAI_BULLE);
   }
 
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
@@ -76,7 +93,14 @@ export function TrieurDepenses({
     const dx = e.clientX - debut.current.x;
     const dy = e.clientY - debut.current.y;
     setOffset({ x: dx, y: dy });
-    if (Math.hypot(dx, dy) < SEUIL_DEPOT) {
+    const distance = Math.hypot(dx, dy);
+    // Un mouvement franc avant même la fin du délai vaut aussi pour un
+    // glissement volontaire — pas besoin d'attendre le minuteur.
+    if (distance > SEUIL_TAP && minuteurBulle.current) {
+      annulerMinuteurBulle();
+      setEnBulle(true);
+    }
+    if (distance < SEUIL_DEPOT) {
       setSurvole(null);
       return;
     }
@@ -106,15 +130,23 @@ export function TrieurDepenses({
   function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
     if (!enTirage) return;
     setEnTirage(false);
+    annulerMinuteurBulle();
     debut.current = null;
     const transaction = pile[0];
-    const cible = Math.hypot(offset.x, offset.y) >= SEUIL_DEPOT ? trouverCible(e.clientX, e.clientY) : null;
+    const distance = Math.hypot(offset.x, offset.y);
+    const cible = distance >= SEUIL_DEPOT ? trouverCible(e.clientX, e.clientY) : null;
     setSurvole(null);
     if (cible && transaction) {
       void deposerSur(cible, transaction);
-    } else {
-      setOffset({ x: 0, y: 0 });
+      return;
     }
+    if (!enBulle && distance < SEUIL_TAP && transaction) {
+      // Relâché quasi sur place, sans être passé par la bulle : un tap,
+      // pas un geste de tri — on ouvre le détail plutôt que de le glisser.
+      setDetailOuvert(transaction);
+    }
+    setOffset({ x: 0, y: 0 });
+    setEnBulle(false);
   }
 
   async function validerNouvelleCategorie(formData: FormData) {
@@ -165,7 +197,7 @@ export function TrieurDepenses({
       </div>
 
       {/* Pile de cartes */}
-      <div className="relative mx-auto mt-6 h-[190px] max-w-xs select-none">
+      <div className="relative mx-auto mt-6 h-[210px] max-w-xs select-none">
         {pile.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-center">
             <p className="font-medium text-foreground">Tout est trié !</p>
@@ -178,44 +210,63 @@ export function TrieurDepenses({
             .map((t, i, arr) => {
               const profondeur = arr.length - 1 - i;
               const estLaCarteDuDessus = profondeur === 0;
+              const commeUneBulle = estLaCarteDuDessus && enBulle;
               return (
                 <div
                   key={t.id}
                   onPointerDown={estLaCarteDuDessus ? onPointerDown : undefined}
                   onPointerMove={estLaCarteDuDessus ? onPointerMove : undefined}
                   onPointerUp={estLaCarteDuDessus ? onPointerUp : undefined}
-                  className="absolute inset-x-0 top-0 rounded-2xl border border-line bg-surface p-4 shadow-lg shadow-black/20"
+                  className={
+                    commeUneBulle
+                      ? "absolute left-1/2 top-1/2 flex h-20 w-20 items-center justify-center rounded-full border-2 bg-accent/20 backdrop-blur-md glow-tri-actif"
+                      : `absolute inset-x-0 top-0 rounded-2xl border bg-surface p-4 shadow-lg shadow-black/20 ${
+                          estLaCarteDuDessus ? "glow-tri" : "border-line"
+                        }`
+                  }
                   style={{
                     zIndex: 10 - profondeur,
-                    transform: estLaCarteDuDessus
-                      ? `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
-                      : `translateY(${profondeur * 8}px) scale(${1 - profondeur * 0.04})`,
+                    transform: commeUneBulle
+                      ? `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`
+                      : estLaCarteDuDessus
+                        ? `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
+                        : `translateY(${profondeur * 16}px) scale(${1 - profondeur * 0.05})`,
                     transition: enTirage && estLaCarteDuDessus ? "none" : "transform 0.25s ease-out",
                     touchAction: "none",
                     cursor: estLaCarteDuDessus ? "grab" : undefined,
                   }}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted" aria-hidden>
-                      ⠿⠿
-                    </span>
-                    <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
+                  {commeUneBulle ? (
+                    <span className="text-sm font-semibold text-foreground">
                       {t.montant >= 0 ? "+" : ""}
                       {formatEur(t.montant)}
                     </span>
-                  </div>
-                  <p className="mt-3 truncate text-lg font-medium text-foreground">
-                    {t.commercant ?? "Sans libellé"}
-                  </p>
-                  <p className="mt-1 text-sm text-muted">{formatDate(t.date)}</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted" aria-hidden>
+                          ⠿⠿
+                        </span>
+                        <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
+                          {t.montant >= 0 ? "+" : ""}
+                          {formatEur(t.montant)}
+                        </span>
+                      </div>
+                      <p className="mt-3 truncate text-lg font-medium text-foreground">
+                        {t.commercant ?? "Sans libellé"}
+                      </p>
+                      <p className="mt-1 text-sm text-muted">{formatDate(t.date)}</p>
+                    </>
+                  )}
                 </div>
               );
             })
         )}
       </div>
-
       {pile.length > 0 && (
-        <p className="mt-3 text-center text-sm text-muted">Glisse la transaction vers une catégorie</p>
+        <p className="mt-3 text-center text-sm text-muted">
+          Tap pour le détail · appui maintenu puis glisse vers une catégorie
+        </p>
       )}
 
       {/* Bulles du bas */}
@@ -283,6 +334,43 @@ export function TrieurDepenses({
           }}
         />
       )}
+
+      {detailOuvert && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          onClick={() => setDetailOuvert(null)}
+        >
+          <div
+            className="glow-tri w-full max-w-sm rounded-2xl border bg-surface p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm text-muted">Détail</p>
+              <button
+                type="button"
+                onClick={() => setDetailOuvert(null)}
+                aria-label="Fermer"
+                className="rounded p-1 text-muted hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+            <p className={`text-3xl font-semibold ${detailOuvert.montant >= 0 ? "text-positive" : "text-foreground"}`}>
+              {detailOuvert.montant >= 0 ? "+" : ""}
+              {formatEur(detailOuvert.montant)}
+            </p>
+            <p className="mt-3 text-base text-foreground">{detailOuvert.commercant ?? "Sans libellé"}</p>
+            <p className="mt-1 text-sm text-muted">
+              {new Date(detailOuvert.date).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -296,8 +384,8 @@ const BulleCategorie = forwardRef<
       type="button"
       ref={ref}
       onClick={onClick}
-      className={`flex flex-col items-center gap-1.5 rounded-2xl border px-4 py-3 transition-colors ${
-        survolee ? "border-accent bg-accent/10" : "border-line bg-surface"
+      className={`flex flex-col items-center gap-1.5 rounded-2xl border bg-surface px-4 py-3 transition-colors ${
+        survolee ? "glow-tri-actif bg-accent/10" : "glow-tri"
       }`}
     >
       <span className={`flex h-11 w-11 items-center justify-center rounded-full ${survolee ? "bg-accent/20 text-accent" : "bg-background text-accent"}`}>

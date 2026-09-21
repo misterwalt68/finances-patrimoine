@@ -68,3 +68,19 @@ a {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
     0 8px 24px -12px color-mix(in srgb, var(--accent) 45%, transparent);
 }
+
+/*
+ * Lueur plus marquée, réservée à l'écran de tri des dépenses (glisser-
+ * déposer) — Maxime veut ce rendu précisément plus "premium" que le reste de
+ * l'app, sur le modèle de la maquette de référence qu'il a fournie.
+ */
+.glow-tri {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent),
+    0 0 32px -6px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.glow-tri-actif {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 40px -4px color-mix(in srgb, var(--accent) 85%, transparent);
+}
