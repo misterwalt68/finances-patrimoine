@@ -147,18 +147,23 @@ export function TrieurDepenses({
     const transaction = pile[0];
     const distance = Math.hypot(offset.x, offset.y);
     const cible = distance >= SEUIL_DEPOT ? trouverCible(e.clientX, e.clientY) : null;
+    const etaitEnBulle = enBulle;
     setSurvole(null);
+    // Remis à zéro avant toute chose, y compris quand un dépôt réussit —
+    // sinon la carte suivante, qui devient "la carte du dessus" dès ce
+    // rendu, hérite du mode bulle du geste précédent et apparaît déjà
+    // rétractée sans qu'on l'ait touchée.
+    setOffset({ x: 0, y: 0 });
+    setEnBulle(false);
     if (cible && transaction) {
       void deposerSur(cible, transaction);
       return;
     }
-    if (!enBulle && distance < SEUIL_TAP && transaction) {
+    if (!etaitEnBulle && distance < SEUIL_TAP && transaction) {
       // Relâché quasi sur place, sans être passé par la bulle : un tap,
       // pas un geste de tri — on ouvre le détail plutôt que de le glisser.
       setDetailOuvert(transaction);
     }
-    setOffset({ x: 0, y: 0 });
-    setEnBulle(false);
   }
 
   async function validerNouvelleCategorie(formData: FormData) {
@@ -305,25 +310,31 @@ export function TrieurDepenses({
       </div>
 
       {/*
-       * Zones en arc, collées aux bords de l'écran, façon appli de swipe
-       * (Tinder) — invisibles au repos, elles n'apparaissent que quand une
-       * carte est soulevée en bulle (`enBulle`), pour ne jamais gêner la
-       * lecture normale de l'écran.
+       * Demi-ovales discrets, plaqués contre les bords de l'écran (bord droit
+       * de la forme = bord de l'écran, pas de débordement) — invisibles au
+       * repos, elles n'apparaissent que quand une carte est soulevée en
+       * bulle (`enBulle`), pour ne jamais gêner la lecture normale de
+       * l'écran. Beaucoup plus hautes que larges, sur le modèle d'une appli
+       * de swipe façon Tinder, mais discret plutôt qu'un gros cercle.
        */}
       <div
         ref={(el) => {
           if (el) ciblesRef.current.set(CIBLE_AJOUTER, el);
           else ciblesRef.current.delete(CIBLE_AJOUTER);
         }}
-        className={`fixed top-1/2 left-[-70px] z-40 flex h-44 w-44 -translate-y-1/2 items-center justify-end rounded-full border-2 border-line bg-surface pr-7 transition-all duration-150 ${
+        className={`fixed top-1/2 left-0 z-40 flex h-56 w-16 -translate-y-1/2 items-center justify-center rounded-r-full border-2 border-l-0 border-line bg-surface pr-2 transition-all duration-150 ${
           enBulle ? "opacity-100" : "pointer-events-none opacity-0"
         } ${survole === CIBLE_AJOUTER ? "glow-tri-actif scale-110 bg-accent/10" : ""}`}
       >
-        <div className="flex max-w-[64px] flex-col items-center gap-1 text-center">
-          <span className="text-xl text-accent" aria-hidden>
+        <div className="flex flex-col items-center gap-1 text-center">
+          <span className="text-lg text-accent" aria-hidden>
             +
           </span>
-          <span className="text-xs text-muted">Ajouter une catégorie</span>
+          <span className="text-[10px] leading-tight text-muted">
+            Nouvelle
+            <br />
+            catégorie
+          </span>
         </div>
       </div>
       <div
@@ -331,15 +342,19 @@ export function TrieurDepenses({
           if (el) ciblesRef.current.set(CIBLE_PLUS_TARD, el);
           else ciblesRef.current.delete(CIBLE_PLUS_TARD);
         }}
-        className={`fixed top-1/2 right-[-70px] z-40 flex h-44 w-44 -translate-y-1/2 items-center justify-start rounded-full border-2 border-line bg-surface pl-7 transition-all duration-150 ${
+        className={`fixed top-1/2 right-0 z-40 flex h-56 w-16 -translate-y-1/2 items-center justify-center rounded-l-full border-2 border-r-0 border-line bg-surface pl-2 transition-all duration-150 ${
           enBulle ? "opacity-100" : "pointer-events-none opacity-0"
         } ${survole === CIBLE_PLUS_TARD ? "glow-tri-actif scale-110 bg-accent/10" : ""}`}
       >
-        <div className="flex max-w-[64px] flex-col items-center gap-1 text-center">
-          <span className="text-xl text-accent" aria-hidden>
+        <div className="flex flex-col items-center gap-1 text-center">
+          <span className="text-lg text-accent" aria-hidden>
             ↻
           </span>
-          <span className="text-xs text-muted">Trier plus tard</span>
+          <span className="text-[10px] leading-tight text-muted">
+            Plus
+            <br />
+            tard
+          </span>
         </div>
       </div>
 
