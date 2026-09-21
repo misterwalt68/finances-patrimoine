@@ -7,11 +7,23 @@ import { categories, transactions, reglesCategorisation } from "@/db/schema";
 import { synchroniserTransactionsBancaires } from "@/app/patrimoine/actions";
 
 /**
+ * Interrupteur unique pour toute la catégorisation automatique — désactivée
+ * à la demande de Maxime le temps qu'il prenne confiance dans le tri manuel
+ * ("pour le moment on peut que le faire manuellement"). Le mécanisme reste
+ * en place (règles toujours enregistrées à chaque tri manuel, cf.
+ * `categoriser` ci-dessous) pour pouvoir la réactiver d'un coup plus tard,
+ * sans perdre l'historique des règles apprises entre-temps.
+ */
+const CATEGORISATION_AUTOMATIQUE_ACTIVE = false;
+
+/**
  * Aucune transaction n'est jamais devinée. La première occurrence d'un
  * libellé passe toujours par un tri manuel ; c'est CE tri qui enregistre la
- * règle (libellé exact → catégorie). Décision explicite de Maxime : jamais
- * de catégorisation automatique "par défaut", seulement un rapprochement
- * exact avec une catégorisation déjà validée à la main.
+ * règle (libellé exact → catégorie). Tant que
+ * `CATEGORISATION_AUTOMATIQUE_ACTIVE` est à `false`, la règle est mémorisée
+ * mais jamais appliquée toute seule — jamais de catégorisation automatique
+ * "par défaut", seulement un rapprochement exact avec une catégorisation
+ * déjà validée à la main, et seulement une fois réactivée.
  */
 async function categoriser(transactionId: string, categorieId: string): Promise<void> {
   const [transaction] = await db
@@ -35,6 +47,8 @@ async function categoriser(transactionId: string, categorieId: string): Promise<
   } else {
     await db.insert(reglesCategorisation).values({ commercant: transaction.commercant, categorieId });
   }
+
+  if (!CATEGORISATION_AUTOMATIQUE_ACTIVE) return;
 
   // Les autres transactions déjà en attente avec le MÊME libellé exact
   // profitent immédiatement de la règle qui vient d'être créée — inutile de
@@ -107,13 +121,14 @@ async function appliquerReglesApprises(): Promise<void> {
  * Le "détecteur de nouvelle transaction" n'est pas un processus séparé — il
  * n'y a rien à détecter en tâche de fond : on relance le même import
  * incrémental que le patrimoine (rien avant la dernière transaction déjà
- * connue, jamais tout l'historique), on applique les règles déjà apprises,
- * et tout ce qui reste "à catégoriser" remonte de soi-même en tête de la
- * file au prochain rendu.
+ * connue, jamais tout l'historique) ; tout ce qui arrive est "à catégoriser"
+ * et remonte de soi-même en tête de la file au prochain rendu. Les règles
+ * apprises ne sont PAS appliquées tant que `CATEGORISATION_AUTOMATIQUE_ACTIVE`
+ * est à `false` — 100% manuel pour l'instant, à la demande de Maxime.
  */
 export async function actualiserTransactions() {
   await synchroniserTransactionsBancaires();
-  await appliquerReglesApprises();
+  if (CATEGORISATION_AUTOMATIQUE_ACTIVE) await appliquerReglesApprises();
   revalidatePath("/depenses");
   revalidatePath("/depenses/trier");
 }
