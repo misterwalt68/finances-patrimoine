@@ -224,9 +224,14 @@ export function TrieurDepenses({
   // bulle "Salaire" sous un paiement carte (demande explicite de Maxime).
   const typeCourant: "revenu" | "charge" | null = pile[0] ? (pile[0].montant >= 0 ? "revenu" : "charge") : null;
   const categoriesAffichees = typeCourant ? categoriesListe.filter((c) => c.type === typeCourant) : [];
-  const CARTE_H = 112; // hauteur d'une carte (px)
-  const REVELATION = 54; // décalage vertical entre deux cartes empilées (px)
+  const CARTE_H = 88; // hauteur d'une carte (px) — moins haute, plus longue que la version précédente
+  const REVELATION = 42; // décalage vertical entre deux cartes empilées (px)
   const NB_CARTES_VISIBLES = 6;
+  // Plus une carte est profonde dans la pile, plus elle "s'éloigne" — échelle
+  // et opacité réduisent progressivement, comme un vrai empilement vu en
+  // perspective plutôt qu'un simple décalage plat.
+  const PROFONDEUR_ECHELLE = [1, 0.96, 0.92, 0.88, 0.84, 0.8];
+  const PROFONDEUR_OPACITE = [1, 0.8, 0.62, 0.46, 0.33, 0.22];
 
   return (
     <div>
@@ -282,24 +287,32 @@ export function TrieurDepenses({
               const profondeur = arr.length - 1 - i;
               const estLaCarteDuDessus = profondeur === 0;
               const eventail = EVENTAIL[profondeur] ?? EVENTAIL[EVENTAIL.length - 1];
+              const echelleProfondeur = PROFONDEUR_ECHELLE[profondeur] ?? PROFONDEUR_ECHELLE[PROFONDEUR_ECHELLE.length - 1];
+              const opaciteProfondeur = PROFONDEUR_OPACITE[profondeur] ?? PROFONDEUR_OPACITE[PROFONDEUR_OPACITE.length - 1];
+              // Arrivée sur une bulle en glissant : la carte tenue réduit
+              // jusqu'à quasi disparaître (comme absorbée par la bulle),
+              // qui elle-même grandit déjà via son propre style survolé.
+              const surUneCible = estLaCarteDuDessus && enTirage && survole !== null;
               return (
                 <div
                   key={t.id}
                   onPointerDown={estLaCarteDuDessus ? onPointerDown : undefined}
                   onPointerMove={estLaCarteDuDessus ? onPointerMove : undefined}
                   onPointerUp={estLaCarteDuDessus ? onPointerUp : undefined}
-                  className={`absolute left-1/2 top-0 w-[90%] overflow-hidden rounded-2xl border bg-surface shadow-lg shadow-black/20 ${
-                    estLaCarteDuDessus ? (enSaisie ? "glow-tri-actif" : "glow-tri") : "border-line"
+                  className={`absolute left-1/2 top-0 w-[95%] overflow-hidden rounded-2xl border bg-surface ${
+                    estLaCarteDuDessus ? (enSaisie ? "glow-tri-actif" : "glow-tri") : "border-line shadow-xl shadow-black/50"
                   }`}
                   style={{
                     height: CARTE_H,
                     zIndex: 10 - profondeur,
-                    opacity: enSaisie && !estLaCarteDuDessus ? 0.3 : 1,
+                    opacity: surUneCible ? 0.15 : estLaCarteDuDessus ? 1 : enSaisie ? opaciteProfondeur * 0.5 : opaciteProfondeur,
                     transform: estLaCarteDuDessus
-                      ? `translate(-50%, 0) translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
-                      : `translate(-50%, ${profondeur * REVELATION}px) translate(${eventail.x}px, 0) rotate(${eventail.r}deg)`,
+                      ? `translate(-50%, 0) translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg) scale(${surUneCible ? 0.08 : 1})`
+                      : `translate(-50%, ${profondeur * REVELATION}px) translate(${eventail.x}px, 0) rotate(${eventail.r}deg) scale(${echelleProfondeur})`,
                     transition:
-                      enTirage && estLaCarteDuDessus ? "opacity 0.15s ease-out" : "transform 0.25s ease-out, opacity 0.15s ease-out",
+                      enTirage && estLaCarteDuDessus
+                        ? "transform 0.2s ease-out, opacity 0.2s ease-out"
+                        : "transform 0.25s ease-out, opacity 0.25s ease-out",
                     touchAction: "none",
                     cursor: estLaCarteDuDessus ? "grab" : undefined,
                   }}
@@ -319,10 +332,7 @@ export function TrieurDepenses({
                   >
                     <IconeAvatar />
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate font-medium text-foreground">{t.commercant ?? "Sans libellé"}</p>
-                        {estLaCarteDuDessus && <IconePoignee />}
-                      </div>
+                      <p className="truncate font-medium text-foreground">{t.commercant ?? "Sans libellé"}</p>
                       <span className="mt-0.5 text-sm text-muted">{formatDate(t.date)}</span>
                     </div>
                     <div className="flex shrink-0 items-start gap-2">
@@ -623,19 +633,6 @@ function IconeAvatar() {
         <path d="M3 10h18" />
       </svg>
     </span>
-  );
-}
-
-/** Poignée façon "déplaçable" — grille de 3×3 points, pas des braille ⠿⠿. */
-function IconePoignee() {
-  return (
-    <svg viewBox="0 0 16 16" className="mt-1 h-4 w-4 shrink-0 text-muted" aria-hidden>
-      {[0, 1, 2].map((ligne) =>
-        [0, 1, 2].map((colonne) => (
-          <circle key={`${ligne}-${colonne}`} cx={2 + colonne * 6} cy={2 + ligne * 6} r={1.2} fill="currentColor" />
-        )),
-      )}
-    </svg>
   );
 }
 
