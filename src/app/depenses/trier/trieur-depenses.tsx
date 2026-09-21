@@ -9,7 +9,13 @@ import { IconeCategorie } from "@/lib/icones-categorie";
 import { categoriserTransaction, creerCategorieEtCategoriser, declasserTransaction } from "../actions";
 import { modifierCategorie } from "@/app/reglages/categories/actions";
 
-type TransactionLegere = { id: string; commercant: string | null; montant: number; date: string };
+type TransactionLegere = {
+  id: string;
+  commercant: string | null;
+  montant: number;
+  date: string;
+  personneLibelle: string | null;
+};
 type CategorieAvecTransactions = {
   id: string;
   libelle: string;
@@ -424,11 +430,6 @@ export function TrieurDepenses({
             })
         )}
       </div>
-      {pile.length > 0 && (
-        <p className="mt-3 text-center text-sm text-muted">
-          Tap pour le détail · appui maintenu puis glisse vers une catégorie
-        </p>
-      )}
 
       {/* Bulles de catégories — suite (même filtre par type) */}
       <div className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-5">
@@ -522,10 +523,10 @@ export function TrieurDepenses({
       {categorieOuverte && (
         <ModaleCategorie
           categorie={categorieOuverte}
-          onFerme={(nouveauLibelle) => {
-            if (nouveauLibelle) {
+          onFerme={(donnees) => {
+            if (donnees) {
               setCategoriesListe((liste) =>
-                liste.map((c) => (c.id === categorieOuverte.id ? { ...c, libelle: nouveauLibelle } : c)),
+                liste.map((c) => (c.id === categorieOuverte.id ? { ...c, ...donnees } : c)),
               );
             }
             setCategorieOuverte(null);
@@ -567,6 +568,9 @@ export function TrieurDepenses({
                 year: "numeric",
               })}
             </p>
+            {detailOuvert.personneLibelle && (
+              <p className="mt-2 text-sm text-muted">Compte {detailOuvert.personneLibelle}</p>
+            )}
           </div>
         </div>
       )}
@@ -609,18 +613,17 @@ function ModaleCategorie({
   onDeclasser,
 }: {
   categorie: CategorieAvecTransactions;
-  onFerme: (nouveauLibelle: string | null) => void;
+  onFerme: (donnees: { libelle: string; icone: string } | null) => void;
   onDeclasser: (transaction: TransactionLegere) => void;
 }) {
   const [libelle, setLibelle] = useState(categorie.libelle);
 
-  async function enregistrer() {
-    const fd = new FormData();
-    fd.set("id", categorie.id);
-    fd.set("libelle", libelle);
-    fd.set("icone", categorie.icone ?? "autre");
-    await modifierCategorie(fd);
-    onFerme(libelle);
+  async function enregistrer(formData: FormData) {
+    formData.set("id", categorie.id);
+    formData.set("libelle", libelle);
+    const icone = String(formData.get("icone") ?? categorie.icone ?? "autre");
+    await modifierCategorie(formData);
+    onFerme({ libelle, icone });
   }
 
   return (
@@ -640,16 +643,19 @@ function ModaleCategorie({
             ✕
           </button>
         </div>
-        <div className="flex gap-2">
-          <input
-            value={libelle}
-            onChange={(e) => setLibelle(e.target.value)}
-            className="h-11 flex-1 rounded-lg border border-line bg-background px-4 text-base text-foreground outline-none focus:border-accent"
-          />
-          <Bouton type="button" onClick={enregistrer} className="shrink-0">
-            Enregistrer
-          </Bouton>
-        </div>
+        <form action={enregistrer} className="space-y-3">
+          <div className="flex gap-2">
+            <input
+              value={libelle}
+              onChange={(e) => setLibelle(e.target.value)}
+              className="h-11 flex-1 rounded-lg border border-line bg-background px-4 text-base text-foreground outline-none focus:border-accent"
+            />
+            <Bouton type="submit" className="shrink-0">
+              Enregistrer
+            </Bouton>
+          </div>
+          <SelecteurIconeCategorie name="icone" defaultValue={categorie.icone ?? "autre"} />
+        </form>
 
         <p className="mt-4 mb-2 text-xs font-medium uppercase tracking-wide text-muted">
           {categorie.transactions.length} transaction{categorie.transactions.length > 1 ? "s" : ""}

@@ -1,15 +1,24 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { transactions, categories } from "@/db/schema";
+import { transactions, categories, comptes, personnes } from "@/db/schema";
 import { ListeVide } from "@/components/ui/carte";
 import { TrieurDepenses } from "./trieur-depenses";
 import { BoutonDecategoriserTout } from "./bouton-decategoriser-tout";
 
 export default async function PageTrierDepenses() {
-  const [toutesTransactions, listeCategories] = await Promise.all([
+  const [toutesTransactions, listeCategories, listeComptes, listePersonnes] = await Promise.all([
     db.select().from(transactions).orderBy(transactions.createdAt),
     db.select().from(categories).orderBy(categories.libelle),
+    db.select().from(comptes),
+    db.select().from(personnes),
   ]);
+
+  const personnesParId = new Map(listePersonnes.map((p) => [p.id, p]));
+  const comptesParId = new Map(listeComptes.map((c) => [c.id, c]));
+  function personneLibelle(compteId: string | null): string | null {
+    const compte = compteId ? comptesParId.get(compteId) : undefined;
+    return compte ? (personnesParId.get(compte.personneId)?.libelle ?? null) : null;
+  }
 
   const pile = toutesTransactions
     .filter((t) => t.statut === "a_categoriser")
@@ -18,6 +27,7 @@ export default async function PageTrierDepenses() {
       commercant: t.commercant,
       montant: Number(t.montant),
       date: t.date,
+      personneLibelle: personneLibelle(t.compteId),
     }));
 
   const compteurs: Record<string, number> = {};
@@ -37,6 +47,7 @@ export default async function PageTrierDepenses() {
         commercant: t.commercant,
         montant: Number(t.montant),
         date: t.date,
+        personneLibelle: personneLibelle(t.compteId),
       })),
   }));
 
