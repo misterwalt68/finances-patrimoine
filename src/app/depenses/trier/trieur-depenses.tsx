@@ -304,28 +304,42 @@ export function TrieurDepenses({
         ))}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        <div
-          ref={(el) => {
-            if (el) ciblesRef.current.set(CIBLE_AJOUTER, el);
-            else ciblesRef.current.delete(CIBLE_AJOUTER);
-          }}
-          className={`flex h-12 w-fit items-center gap-2 rounded-full border border-dashed px-4 text-sm transition-colors ${
-            survole === CIBLE_AJOUTER ? "border-accent text-accent" : "border-line text-muted"
-          }`}
-        >
-          <span aria-hidden>+</span> Ajouter une catégorie
+      {/*
+       * Zones en arc, collées aux bords de l'écran, façon appli de swipe
+       * (Tinder) — invisibles au repos, elles n'apparaissent que quand une
+       * carte est soulevée en bulle (`enBulle`), pour ne jamais gêner la
+       * lecture normale de l'écran.
+       */}
+      <div
+        ref={(el) => {
+          if (el) ciblesRef.current.set(CIBLE_AJOUTER, el);
+          else ciblesRef.current.delete(CIBLE_AJOUTER);
+        }}
+        className={`fixed top-1/2 left-[-70px] z-40 flex h-44 w-44 -translate-y-1/2 items-center justify-end rounded-full border-2 border-line bg-surface pr-7 transition-all duration-150 ${
+          enBulle ? "opacity-100" : "pointer-events-none opacity-0"
+        } ${survole === CIBLE_AJOUTER ? "glow-tri-actif scale-110 bg-accent/10" : ""}`}
+      >
+        <div className="flex max-w-[64px] flex-col items-center gap-1 text-center">
+          <span className="text-xl text-accent" aria-hidden>
+            +
+          </span>
+          <span className="text-xs text-muted">Ajouter une catégorie</span>
         </div>
-        <div
-          ref={(el) => {
-            if (el) ciblesRef.current.set(CIBLE_PLUS_TARD, el);
-            else ciblesRef.current.delete(CIBLE_PLUS_TARD);
-          }}
-          className={`flex h-12 w-fit items-center gap-2 rounded-full border border-dashed px-4 text-sm transition-colors ${
-            survole === CIBLE_PLUS_TARD ? "border-accent text-accent" : "border-line text-muted"
-          }`}
-        >
-          <span aria-hidden>↻</span> Trier plus tard
+      </div>
+      <div
+        ref={(el) => {
+          if (el) ciblesRef.current.set(CIBLE_PLUS_TARD, el);
+          else ciblesRef.current.delete(CIBLE_PLUS_TARD);
+        }}
+        className={`fixed top-1/2 right-[-70px] z-40 flex h-44 w-44 -translate-y-1/2 items-center justify-start rounded-full border-2 border-line bg-surface pl-7 transition-all duration-150 ${
+          enBulle ? "opacity-100" : "pointer-events-none opacity-0"
+        } ${survole === CIBLE_PLUS_TARD ? "glow-tri-actif scale-110 bg-accent/10" : ""}`}
+      >
+        <div className="flex max-w-[64px] flex-col items-center gap-1 text-center">
+          <span className="text-xl text-accent" aria-hidden>
+            ↻
+          </span>
+          <span className="text-xs text-muted">Trier plus tard</span>
         </div>
       </div>
 
