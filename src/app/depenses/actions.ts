@@ -92,6 +92,16 @@ export async function creerCategorieEtCategoriser(formData: FormData) {
 }
 
 /**
+ * Même chose, mais sans valeur de retour — un formulaire HTML classique
+ * (`<form action={...}>`, ex. la liste des transactions) n'attend rien en
+ * retour, contrairement à l'écran de tri qui a besoin de connaître la
+ * catégorie créée pour l'ajouter tout de suite à la pile de bulles.
+ */
+export async function creerCategorieEtCategoriserSansRetour(formData: FormData): Promise<void> {
+  await creerCategorieEtCategoriser(formData);
+}
+
+/**
  * Applique les règles apprises aux transactions encore en attente — jamais
  * de devinette : seulement un libellé strictement identique à une
  * catégorisation déjà validée à la main (cf. `categoriser` ci-dessus).
