@@ -14,6 +14,7 @@ type CategorieAvecTransactions = {
   id: string;
   libelle: string;
   icone: string | null;
+  type: "revenu" | "charge";
   transactions: TransactionLegere[];
 };
 
@@ -174,7 +175,8 @@ export function TrieurDepenses({
     formData.set("transactionId", transaction.id);
     const nouvelleCategorie = await creerCategorieEtCategoriser(formData);
     if (nouvelleCategorie) {
-      setCategoriesListe((liste) => [...liste, { ...nouvelleCategorie, transactions: [transaction] }]);
+      const type: "revenu" | "charge" = nouvelleCategorie.type === "revenu" ? "revenu" : "charge";
+      setCategoriesListe((liste) => [...liste, { ...nouvelleCategorie, type, transactions: [transaction] }]);
       setCompteurs((c) => ({ ...c, [nouvelleCategorie.id]: 1 }));
     }
     setCreationPour(null);
@@ -204,17 +206,28 @@ export function TrieurDepenses({
 
   const progres = total > 0 ? (total - pile.length) / total : 0;
   const rotation = Math.max(-12, Math.min(12, offset.x / 10));
+  // Le type de bulles à proposer suit celui de la transaction en haut de la
+  // pile — jamais de bulle "Restaurants" sous un virement entrant, jamais de
+  // bulle "Salaire" sous un paiement carte (demande explicite de Maxime).
+  const typeCourant: "revenu" | "charge" | null = pile[0] ? (pile[0].montant >= 0 ? "revenu" : "charge") : null;
+  const categoriesAffichees = typeCourant ? categoriesListe.filter((c) => c.type === typeCourant) : [];
+  const CARTE_H = 112; // hauteur d'une carte (px)
+  const REVELATION = 54; // décalage vertical entre deux cartes empilées (px)
+  const NB_CARTES_VISIBLES = 6;
 
   return (
     <div>
-      <p className="text-sm text-muted">{pile.length} transaction{pile.length > 1 ? "s" : ""}</p>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progres * 100}%` }} />
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-muted">{pile.length} transaction{pile.length > 1 ? "s" : ""}</p>
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progres * 100}%` }} />
+        </div>
       </div>
 
-      {/* Bulles du haut */}
+      {/* Bulles de catégories — uniquement celles du même type (revenu/charge) que la carte du dessus */}
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        {categoriesListe.slice(0, Math.ceil(categoriesListe.length / 2)).map((c) => (
+        {categoriesAffichees.slice(0, Math.ceil(categoriesAffichees.length / 2)).map((c) => (
           <BulleCategorie
             key={c.id}
             ref={(el) => {
@@ -229,8 +242,16 @@ export function TrieurDepenses({
         ))}
       </div>
 
-      {/* Pile de cartes */}
-      <div className="relative mx-auto mt-6 h-[230px] max-w-xs select-none">
+      {/*
+       * Pile en éventail façon maquette de référence : chaque carte derrière
+       * la première est décalée verticalement assez pour rester lisible
+       * (commerçant, date, montant), pas juste un liseré de quelques pixels.
+       * Seule la carte du dessus est saisissable et affiche poignée + loupe.
+       */}
+      <div
+        className="relative mx-auto mt-6 max-w-xs select-none"
+        style={{ height: CARTE_H + (NB_CARTES_VISIBLES - 1) * REVELATION }}
+      >
         {pile.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-center">
             <p className="font-medium text-foreground">Tout est trié !</p>
@@ -238,7 +259,7 @@ export function TrieurDepenses({
           </div>
         ) : (
           [...pile]
-            .slice(0, 4)
+            .slice(0, NB_CARTES_VISIBLES)
             .reverse()
             .map((t, i, arr) => {
               const profondeur = arr.length - 1 - i;
@@ -253,21 +274,21 @@ export function TrieurDepenses({
                   className={
                     commeUneBulle
                       ? "absolute left-1/2 top-1/2 flex h-20 w-20 items-center justify-center rounded-full border-2 bg-accent/20 backdrop-blur-md glow-tri-actif"
-                      : `absolute inset-x-0 top-0 h-44 rounded-2xl border bg-surface p-4 shadow-lg shadow-black/20 ${
+                      : `absolute inset-x-0 top-0 overflow-hidden rounded-2xl border bg-surface shadow-lg shadow-black/20 ${
                           estLaCarteDuDessus ? "glow-tri" : "border-line"
                         }`
                   }
                   style={{
+                    height: commeUneBulle ? undefined : CARTE_H,
                     zIndex: 10 - profondeur,
                     transform: commeUneBulle
                       ? `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`
                       : estLaCarteDuDessus
                         ? `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
-                        : `translateY(${profondeur * 16}px) scale(${1 - profondeur * 0.05})`,
-                    // Une fois la carte du dessus rétractée en bulle, celle
-                    // juste derrière devient visible d'un coup — la flouter
-                    // rappelle qu'elle n'est pas celle qu'on est en train de
-                    // ranger, sans la cacher complètement.
+                        : `translateY(${profondeur * REVELATION}px)`,
+                    // Seule la carte juste derrière celle en cours de tri se
+                    // floute quand elle bascule en bulle — les autres, plus
+                    // loin dans la pile, restent lisibles.
                     filter: enBulle && profondeur === 1 ? "blur(5px)" : undefined,
                     transition:
                       enTirage && estLaCarteDuDessus ? "filter 0.15s ease-out" : "transform 0.25s ease-out, filter 0.15s ease-out",
@@ -281,35 +302,46 @@ export function TrieurDepenses({
                       {formatEur(t.montant)}
                     </span>
                   ) : (
-                    <div className="flex h-full flex-col">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-lg font-medium text-foreground">
-                          {t.commercant ?? "Sans libellé"}
-                        </p>
-                        <IconePoignee />
-                      </div>
-                      <div className="mt-auto flex items-end justify-between pt-3">
-                        <span className="text-sm text-muted">{formatDate(t.date)}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
-                            {t.montant >= 0 ? "+" : ""}
-                            {formatEur(t.montant)}
-                          </span>
-                          {estLaCarteDuDessus && (
-                            <button
-                              type="button"
-                              onPointerDown={(e) => e.stopPropagation()}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDetailOuvert(t);
-                              }}
-                              aria-label="Voir le détail"
-                              className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
-                            >
-                              <IconeLoupe className="h-4 w-4" />
-                            </button>
-                          )}
+                    <div
+                      className={
+                        estLaCarteDuDessus
+                          ? "flex h-full items-center gap-3 p-4"
+                          : // Cartes derrière la première : seul le bas de leur
+                            // boîte dépasse de sous la carte du dessus (celle-ci
+                            // les recouvre à mesure qu'on s'enfonce dans la
+                            // pile) — le contenu est donc ancré en bas, pas
+                            // centré, sinon il resterait caché sous la carte de
+                            // devant.
+                            "absolute inset-x-0 bottom-0 flex items-center gap-3 p-4"
+                      }
+                    >
+                      <IconeAvatar />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate font-medium text-foreground">{t.commercant ?? "Sans libellé"}</p>
+                          {estLaCarteDuDessus && <IconePoignee />}
                         </div>
+                        <span className="mt-0.5 text-sm text-muted">{formatDate(t.date)}</span>
+                      </div>
+                      <div className="flex shrink-0 items-start gap-2">
+                        <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
+                          {t.montant >= 0 ? "+" : ""}
+                          {formatEur(t.montant)}
+                        </span>
+                        {estLaCarteDuDessus && (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailOuvert(t);
+                            }}
+                            aria-label="Voir le détail"
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
+                          >
+                            <IconeLoupe className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -324,9 +356,9 @@ export function TrieurDepenses({
         </p>
       )}
 
-      {/* Bulles du bas */}
+      {/* Bulles de catégories — suite (même filtre par type) */}
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        {categoriesListe.slice(Math.ceil(categoriesListe.length / 2)).map((c) => (
+        {categoriesAffichees.slice(Math.ceil(categoriesAffichees.length / 2)).map((c) => (
           <BulleCategorie
             key={c.id}
             ref={(el) => {
@@ -517,7 +549,12 @@ function ModaleCategorie({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-medium text-foreground">Modifier la catégorie</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-foreground">Modifier la catégorie</p>
+            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">
+              {categorie.type === "revenu" ? "Revenu" : "Charge"}
+            </span>
+          </div>
           <button type="button" onClick={() => onFerme(null)} aria-label="Fermer" className="rounded p-1 text-muted hover:text-foreground">
             ✕
           </button>
@@ -562,6 +599,22 @@ function ModaleCategorie({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Avatar générique côté gauche de chaque carte — pas un vrai logo marchand
+ * (aucune source de logo par commerçant dans l'app), mais reprend l'anatomie
+ * de la maquette de référence (icône ronde à gauche du libellé).
+ */
+function IconeAvatar() {
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-accent">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="M3 10h18" />
+      </svg>
+    </span>
   );
 }
 

@@ -75,20 +75,33 @@ export async function categoriserTransaction(formData: FormData) {
   revalidatePath("/depenses/trier");
 }
 
-/** Créée depuis l'écran de tri (glisser vers "Ajouter une catégorie") — crée la catégorie et catégorise dans le même geste. */
+/**
+ * Créée depuis l'écran de tri (glisser vers "Ajouter une catégorie") — crée
+ * la catégorie et catégorise dans le même geste. Le type (revenu/charge)
+ * n'est jamais demandé à l'utilisateur : il est déduit du signe de LA
+ * transaction en train d'être triée, puisqu'on ne peut être en train de
+ * glisser qu'une transaction du type actuellement affiché.
+ */
 export async function creerCategorieEtCategoriser(formData: FormData) {
   const transactionId = String(formData.get("transactionId") ?? "").trim();
   const libelle = String(formData.get("libelle") ?? "").trim();
   const icone = String(formData.get("icone") ?? "").trim();
   if (!transactionId || !libelle) return;
 
-  const [categorie] = await db.insert(categories).values({ libelle, icone: icone || null }).returning();
+  const [transaction] = await db
+    .select({ montant: transactions.montant })
+    .from(transactions)
+    .where(eq(transactions.id, transactionId));
+  if (!transaction) return;
+  const type = Number(transaction.montant) >= 0 ? "revenu" : "charge";
+
+  const [categorie] = await db.insert(categories).values({ libelle, icone: icone || null, type }).returning();
   await categoriser(transactionId, categorie.id);
 
   revalidatePath("/depenses");
   revalidatePath("/depenses/trier");
   revalidatePath("/reglages/categories");
-  return { id: categorie.id, libelle: categorie.libelle, icone: categorie.icone };
+  return { id: categorie.id, libelle: categorie.libelle, icone: categorie.icone, type: categorie.type };
 }
 
 /**

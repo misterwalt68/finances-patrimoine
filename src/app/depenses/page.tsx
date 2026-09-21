@@ -91,7 +91,9 @@ export default async function PageDepenses() {
                     institutionNom={l.institution?.nom}
                     personneLibelle={l.personne?.libelle}
                     categorieLibelle={l.categorie?.libelle ?? null}
-                    categories={listeCategories}
+                    categories={listeCategories.filter((c) =>
+                      Number(l.transaction.montant) >= 0 ? c.type === "revenu" : c.type === "charge",
+                    )}
                   />
                 ))}
               </ul>

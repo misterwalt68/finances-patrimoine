@@ -234,6 +234,10 @@ export const categories = pgTable("categories", {
   // — sélectionne juste un pictogramme, jamais la catégorie elle-même (qui
   // reste un libellé libre créé depuis l'interface).
   icone: text("icone"),
+  // revenu | charge — une catégorie sert soit à ranger des gains, soit des
+  // dépenses, jamais les deux (évite qu'une catégorie de dépense apparaisse
+  // proposée pour trier un virement entrant, et inversement).
+  type: text("type").notNull().default("charge"),
   parentId: uuid("parent_id").references(
     (): AnyPgColumn => categories.id,
     { onDelete: "set null" },

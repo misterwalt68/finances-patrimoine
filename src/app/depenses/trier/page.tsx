@@ -29,6 +29,7 @@ export default async function PageTrierDepenses() {
     id: c.id,
     libelle: c.libelle,
     icone: c.icone,
+    type: c.type === "revenu" ? ("revenu" as const) : ("charge" as const),
     transactions: toutesTransactions
       .filter((t) => t.categorieId === c.id)
       .map((t) => ({
@@ -48,7 +49,7 @@ export default async function PageTrierDepenses() {
         <Link href="/depenses" className="text-sm text-muted transition-colors hover:text-foreground">
           ← Dépenses
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Trier mes dépenses</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Rangement Transactions</h1>
       </header>
 
       {listeCategories.length === 0 ? (

@@ -5,6 +5,7 @@ import { Bouton } from "@/components/ui/bouton";
 import { Carte, Badge, ListeVide } from "@/components/ui/carte";
 import { SelecteurIconeCategorie } from "@/components/ui/selecteur-icone";
 import { IconeCategorie } from "@/lib/icones-categorie";
+import { TYPES_CHARGE_REVENU } from "@/lib/constants";
 import { creerCategorie } from "./actions";
 
 export default async function PageCategories() {
@@ -16,6 +17,13 @@ export default async function PageCategories() {
       <Carte>
         <form action={creerCategorie} className="space-y-3">
           <Champ label="Libellé" name="libelle" placeholder="Restaurants" required />
+          <ChampSelect label="Type" name="type" defaultValue="charge">
+            {TYPES_CHARGE_REVENU.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </ChampSelect>
           <SelecteurIconeCategorie name="icone" />
           <ChampSelect label="Catégorie parente (optionnel)" name="parentId" defaultValue="">
             <option value="">Aucune — catégorie racine</option>
@@ -46,6 +54,7 @@ export default async function PageCategories() {
                     <IconeCategorie icone={c.icone} className="h-[18px] w-[18px]" />
                   </span>
                   <p className="flex-1 font-medium text-foreground">{c.libelle}</p>
+                  <Badge>{c.type === "revenu" ? "Revenu" : "Charge"}</Badge>
                   {c.parentId && <Badge>{parentsParId.get(c.parentId)?.libelle ?? "—"}</Badge>}
                 </li>
               ))}
