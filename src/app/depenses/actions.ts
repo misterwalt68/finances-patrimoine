@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, transactions, reglesCategorisation } from "@/db/schema";
 import { synchroniserTransactionsBancaires } from "@/app/patrimoine/actions";
@@ -139,6 +139,24 @@ async function appliquerReglesApprises(): Promise<void> {
 export async function actualiserTransactions() {
   await synchroniserTransactionsBancaires();
   if (CATEGORISATION_AUTOMATIQUE_ACTIVE) await appliquerReglesApprises();
+  revalidatePath("/depenses");
+  revalidatePath("/depenses/trier");
+}
+
+/**
+ * Outil de développement — remet toutes les transactions catégorisées à
+ * "à catégoriser" pour pouvoir retester le tri depuis le début. Ne touche
+ * jamais une transaction dont `categorieId` est déjà `null` (ex. le virement
+ * interne du Livret A, marqué "categorise" sans catégorie par son propre
+ * mécanisme) : la réinitialiser la ferait retraiter en double à la prochaine
+ * actualisation. Les règles apprises restent intactes — seul le tri est
+ * remis à zéro, pas ce qu'on a appris.
+ */
+export async function decategoriserTout() {
+  await db
+    .update(transactions)
+    .set({ categorieId: null, statut: "a_categoriser" })
+    .where(isNotNull(transactions.categorieId));
   revalidatePath("/depenses");
   revalidatePath("/depenses/trier");
 }

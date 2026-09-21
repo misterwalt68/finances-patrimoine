@@ -384,8 +384,8 @@ const BulleCategorie = forwardRef<
       type="button"
       ref={ref}
       onClick={onClick}
-      className={`flex flex-col items-center gap-1.5 rounded-2xl border bg-surface px-4 py-3 transition-colors ${
-        survolee ? "glow-tri-actif bg-accent/10" : "glow-tri"
+      className={`flex flex-col items-center gap-1.5 rounded-2xl border border-line bg-surface px-4 py-3 transition-all ${
+        survolee ? "glow-tri-actif scale-110 bg-accent/10" : ""
       }`}
     >
       <span className={`flex h-11 w-11 items-center justify-center rounded-full ${survolee ? "bg-accent/20 text-accent" : "bg-background text-accent"}`}>

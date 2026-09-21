@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions, categories } from "@/db/schema";
 import { ListeVide } from "@/components/ui/carte";
 import { TrieurDepenses } from "./trieur-depenses";
+import { BoutonDecategoriserTout } from "./bouton-decategoriser-tout";
 
 export default async function PageTrierDepenses() {
   const [toutesTransactions, listeCategories] = await Promise.all([
@@ -40,6 +41,9 @@ export default async function PageTrierDepenses() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
+      <div className="flex pt-2">
+        <BoutonDecategoriserTout />
+      </div>
       <header className="py-6">
         <Link href="/depenses" className="text-sm text-muted transition-colors hover:text-foreground">
           ← Dépenses
