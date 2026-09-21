@@ -1,7 +1,7 @@
 import { Champ } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { Badge } from "@/components/ui/carte";
-import { categoriserTransaction } from "./actions";
+import { categoriserTransaction, creerCategorieEtCategoriser } from "./actions";
 
 type Categorie = { id: string; libelle: string };
 
@@ -83,10 +83,16 @@ export function LigneTransaction({
             </form>
           ))}
         </div>
-        <form action={categoriserTransaction} className="mt-2 flex gap-2">
+        <form
+          action={async (formData: FormData) => {
+            await creerCategorieEtCategoriser(formData);
+          }}
+          className="mt-2 flex gap-2"
+        >
           <input type="hidden" name="transactionId" value={transaction.id} />
+          <input type="hidden" name="icone" value="autre" />
           <div className="flex-1">
-            <Champ label="Nouvelle catégorie" name="nouvelleCategorie" placeholder="Ex. Vacances…" />
+            <Champ label="Nouvelle catégorie" name="libelle" placeholder="Ex. Vacances…" />
           </div>
           <Bouton type="submit" className="shrink-0">
             Créer

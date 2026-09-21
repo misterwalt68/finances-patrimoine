@@ -230,6 +230,10 @@ export const chargesRevenusHistorique = pgTable("charges_revenus_historique", {
 export const categories = pgTable("categories", {
   id: id(),
   libelle: text("libelle").notNull(),
+  // Discriminant technique (clé dans ICONES_CATEGORIE, src/lib/constants.ts)
+  // — sélectionne juste un pictogramme, jamais la catégorie elle-même (qui
+  // reste un libellé libre créé depuis l'interface).
+  icone: text("icone"),
   parentId: uuid("parent_id").references(
     (): AnyPgColumn => categories.id,
     { onDelete: "set null" },

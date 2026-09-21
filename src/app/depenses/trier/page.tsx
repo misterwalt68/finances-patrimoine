@@ -1,0 +1,67 @@
+import Link from "next/link";
+import { db } from "@/db";
+import { transactions, categories } from "@/db/schema";
+import { ListeVide } from "@/components/ui/carte";
+import { TrieurDepenses } from "./trieur-depenses";
+
+export default async function PageTrierDepenses() {
+  const [toutesTransactions, listeCategories] = await Promise.all([
+    db.select().from(transactions).orderBy(transactions.createdAt),
+    db.select().from(categories).orderBy(categories.libelle),
+  ]);
+
+  const pile = toutesTransactions
+    .filter((t) => t.statut === "a_categoriser")
+    .map((t) => ({
+      id: t.id,
+      commercant: t.commercant,
+      montant: Number(t.montant),
+      date: t.date,
+    }));
+
+  const compteurs: Record<string, number> = {};
+  for (const t of toutesTransactions) {
+    if (t.categorieId) compteurs[t.categorieId] = (compteurs[t.categorieId] ?? 0) + 1;
+  }
+
+  const categoriesAvecTransactions = listeCategories.map((c) => ({
+    id: c.id,
+    libelle: c.libelle,
+    icone: c.icone,
+    transactions: toutesTransactions
+      .filter((t) => t.categorieId === c.id)
+      .map((t) => ({
+        id: t.id,
+        commercant: t.commercant,
+        montant: Number(t.montant),
+        date: t.date,
+      })),
+  }));
+
+  return (
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-safe pt-safe">
+      <header className="py-6">
+        <Link href="/depenses" className="text-sm text-muted transition-colors hover:text-foreground">
+          ← Dépenses
+        </Link>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Trier mes dépenses</h1>
+      </header>
+
+      {listeCategories.length === 0 ? (
+        <ListeVide>
+          Crée d&apos;abord une catégorie dans{" "}
+          <Link href="/reglages/categories" className="text-accent">
+            les réglages
+          </Link>
+          .
+        </ListeVide>
+      ) : (
+        <TrieurDepenses
+          pileInitiale={pile}
+          categoriesInitiales={categoriesAvecTransactions}
+          compteursInitiaux={compteurs}
+        />
+      )}
+    </div>
+  );
+}

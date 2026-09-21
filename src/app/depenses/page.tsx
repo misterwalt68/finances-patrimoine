@@ -59,10 +59,17 @@ export default async function PageDepenses() {
       ) : (
         <>
           {nbACategoriser > 0 && (
-            <Carte accent className="mb-4">
-              <p className="text-sm text-muted">À catégoriser</p>
-              <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{nbACategoriser}</p>
-            </Carte>
+            <Link href="/depenses/trier" className="mb-4 block">
+              <Carte accent className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted">À catégoriser</p>
+                  <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{nbACategoriser}</p>
+                </div>
+                <span className="text-muted" aria-hidden>
+                  ›
+                </span>
+              </Carte>
+            </Link>
           )}
 
           {lignes.length === 0 ? (

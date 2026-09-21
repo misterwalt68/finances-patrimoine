@@ -57,6 +57,13 @@
       "when": 1789903926192,
       "tag": "0007_useful_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789980793376,
+      "tag": "0008_yummy_venom",
+      "breakpoints": true
     }
   ]
 }

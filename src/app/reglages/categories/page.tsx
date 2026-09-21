@@ -3,6 +3,8 @@ import { categories } from "@/db/schema";
 import { Champ, ChampSelect } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { Carte, Badge, ListeVide } from "@/components/ui/carte";
+import { SelecteurIconeCategorie } from "@/components/ui/selecteur-icone";
+import { IconeCategorie } from "@/lib/icones-categorie";
 import { creerCategorie } from "./actions";
 
 export default async function PageCategories() {
@@ -14,6 +16,7 @@ export default async function PageCategories() {
       <Carte>
         <form action={creerCategorie} className="space-y-3">
           <Champ label="Libellé" name="libelle" placeholder="Restaurants" required />
+          <SelecteurIconeCategorie name="icone" />
           <ChampSelect label="Catégorie parente (optionnel)" name="parentId" defaultValue="">
             <option value="">Aucune — catégorie racine</option>
             {liste.map((c) => (
@@ -38,8 +41,11 @@ export default async function PageCategories() {
           <Carte>
             <ul className="divide-y divide-line">
               {liste.map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                  <p className="font-medium text-foreground">{c.libelle}</p>
+                <li key={c.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background text-accent">
+                    <IconeCategorie icone={c.icone} className="h-[18px] w-[18px]" />
+                  </span>
+                  <p className="flex-1 font-medium text-foreground">{c.libelle}</p>
                   {c.parentId && <Badge>{parentsParId.get(c.parentId)?.libelle ?? "—"}</Badge>}
                 </li>
               ))}

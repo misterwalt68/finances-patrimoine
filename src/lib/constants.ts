@@ -42,6 +42,21 @@ export const SOURCES_PRIX = [
   { value: "manuel", label: "Manuel" },
 ] as const;
 
+export const ICONES_CATEGORIE = [
+  { value: "courses", label: "Courses" },
+  { value: "restaurant", label: "Restaurant" },
+  { value: "transport", label: "Transport" },
+  { value: "maison", label: "Maison" },
+  { value: "vetements", label: "Vêtements" },
+  { value: "loisirs", label: "Loisirs" },
+  { value: "sante", label: "Santé" },
+  { value: "abonnement", label: "Abonnement" },
+  { value: "energie", label: "Énergie" },
+  { value: "voyage", label: "Voyage" },
+  { value: "cadeau", label: "Cadeau" },
+  { value: "autre", label: "Autre" },
+] as const;
+
 export const TYPES_CHARGE_REVENU = [
   { value: "revenu", label: "Revenu" },
   { value: "charge", label: "Charge" },
