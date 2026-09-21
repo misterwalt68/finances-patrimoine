@@ -197,7 +197,13 @@ export async function obtenirTransactionsBancaires(
 
   return {
     transactions: brut.transactions.map((t) => {
-      const montantAbsolu = Number(t.transaction_amount.amount);
+      // La spec (Berlin Group / NextGenPSD2, suivie par Enable Banking) veut
+      // `transaction_amount.amount` toujours positif, le signe venant
+      // uniquement de `credit_debit_indicator` — mais certaines banques
+      // (Trade Republic vérifié en direct) renvoient déjà un montant signé
+      // pour les débits. `Math.abs` avant d'appliquer le signe gère les deux
+      // cas sans rien casser pour les banques qui respectent la spec.
+      const montantAbsolu = Math.abs(Number(t.transaction_amount.amount));
       const signe = t.credit_debit_indicator === "DBIT" ? -1 : 1;
       const montant = montantAbsolu * signe;
       const date = t.transaction_date ?? t.booking_date ?? t.value_date ?? null;
