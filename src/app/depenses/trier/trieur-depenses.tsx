@@ -6,7 +6,7 @@ import { Champ } from "@/components/ui/champ";
 import { Bouton } from "@/components/ui/bouton";
 import { SelecteurIconeCategorie } from "@/components/ui/selecteur-icone";
 import { IconeCategorie } from "@/lib/icones-categorie";
-import { categoriserTransaction, creerCategorieEtCategoriser } from "../actions";
+import { categoriserTransaction, creerCategorieEtCategoriser, declasserTransaction } from "../actions";
 import { modifierCategorie } from "@/app/reglages/categories/actions";
 
 type TransactionLegere = { id: string; commercant: string | null; montant: number; date: string };
@@ -186,6 +186,22 @@ export function TrieurDepenses({
     setCreationPour(null);
   }
 
+  /** Retire une transaction de sa catégorie et la renvoie dans la pile à trier. */
+  async function declasser(transaction: TransactionLegere, categorieId: string) {
+    setCategoriesListe((liste) =>
+      liste.map((c) =>
+        c.id === categorieId ? { ...c, transactions: c.transactions.filter((t) => t.id !== transaction.id) } : c,
+      ),
+    );
+    setCompteurs((c) => ({ ...c, [categorieId]: Math.max(0, (c[categorieId] ?? 0) - 1) }));
+    setCategorieOuverte((co) =>
+      co && co.id === categorieId ? { ...co, transactions: co.transactions.filter((t) => t.id !== transaction.id) } : co,
+    );
+    setPile((p) => [...p, transaction]);
+    await declasserTransaction(transaction.id);
+    router.refresh();
+  }
+
   const progres = total > 0 ? (total - pile.length) / total : 0;
   const rotation = Math.max(-12, Math.min(12, offset.x / 10));
 
@@ -214,7 +230,7 @@ export function TrieurDepenses({
       </div>
 
       {/* Pile de cartes */}
-      <div className="relative mx-auto mt-6 h-[210px] max-w-xs select-none">
+      <div className="relative mx-auto mt-6 h-[230px] max-w-xs select-none">
         {pile.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-center">
             <p className="font-medium text-foreground">Tout est trié !</p>
@@ -237,7 +253,7 @@ export function TrieurDepenses({
                   className={
                     commeUneBulle
                       ? "absolute left-1/2 top-1/2 flex h-20 w-20 items-center justify-center rounded-full border-2 bg-accent/20 backdrop-blur-md glow-tri-actif"
-                      : `absolute inset-x-0 top-0 rounded-2xl border bg-surface p-4 shadow-lg shadow-black/20 ${
+                      : `absolute inset-x-0 top-0 h-44 rounded-2xl border bg-surface p-4 shadow-lg shadow-black/20 ${
                           estLaCarteDuDessus ? "glow-tri" : "border-line"
                         }`
                   }
@@ -265,21 +281,37 @@ export function TrieurDepenses({
                       {formatEur(t.montant)}
                     </span>
                   ) : (
-                    <>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-muted" aria-hidden>
-                          ⠿⠿
-                        </span>
-                        <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
-                          {t.montant >= 0 ? "+" : ""}
-                          {formatEur(t.montant)}
-                        </span>
+                    <div className="flex h-full flex-col">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-lg font-medium text-foreground">
+                          {t.commercant ?? "Sans libellé"}
+                        </p>
+                        <IconePoignee />
                       </div>
-                      <p className="mt-3 truncate text-lg font-medium text-foreground">
-                        {t.commercant ?? "Sans libellé"}
-                      </p>
-                      <p className="mt-1 text-sm text-muted">{formatDate(t.date)}</p>
-                    </>
+                      <div className="mt-auto flex items-end justify-between pt-3">
+                        <span className="text-sm text-muted">{formatDate(t.date)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
+                            {t.montant >= 0 ? "+" : ""}
+                            {formatEur(t.montant)}
+                          </span>
+                          {estLaCarteDuDessus && (
+                            <button
+                              type="button"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailOuvert(t);
+                              }}
+                              aria-label="Voir le détail"
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
+                            >
+                              <IconeLoupe className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -392,6 +424,7 @@ export function TrieurDepenses({
             }
             setCategorieOuverte(null);
           }}
+          onDeclasser={(transaction) => declasser(transaction, categorieOuverte.id)}
         />
       )}
 
@@ -460,9 +493,11 @@ const BulleCategorie = forwardRef<
 function ModaleCategorie({
   categorie,
   onFerme,
+  onDeclasser,
 }: {
   categorie: CategorieAvecTransactions;
   onFerme: (nouveauLibelle: string | null) => void;
+  onDeclasser: (transaction: TransactionLegere) => void;
 }) {
   const [libelle, setLibelle] = useState(categorie.libelle);
 
@@ -508,9 +543,18 @@ function ModaleCategorie({
             {categorie.transactions.map((t) => (
               <li key={t.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="truncate text-foreground">{t.commercant ?? "Sans libellé"}</span>
-                <span className={`shrink-0 ${t.montant >= 0 ? "text-positive" : "text-muted"}`}>
-                  {t.montant >= 0 ? "+" : ""}
-                  {formatEur(t.montant)}
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className={t.montant >= 0 ? "text-positive" : "text-muted"}>
+                    {t.montant >= 0 ? "+" : ""}
+                    {formatEur(t.montant)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onDeclasser(t)}
+                    className="rounded-full border border-line px-2 py-0.5 text-xs text-muted transition-colors hover:border-negative hover:text-negative"
+                  >
+                    Déclasser
+                  </button>
                 </span>
               </li>
             ))}
@@ -518,5 +562,36 @@ function ModaleCategorie({
         )}
       </div>
     </div>
+  );
+}
+
+/** Poignée façon "déplaçable" — grille de 3×3 points, pas des braille ⠿⠿. */
+function IconePoignee() {
+  return (
+    <svg viewBox="0 0 16 16" className="mt-1 h-4 w-4 shrink-0 text-muted" aria-hidden>
+      {[0, 1, 2].map((ligne) =>
+        [0, 1, 2].map((colonne) => (
+          <circle key={`${ligne}-${colonne}`} cx={2 + colonne * 6} cy={2 + ligne * 6} r={1.2} fill="currentColor" />
+        )),
+      )}
+    </svg>
+  );
+}
+
+function IconeLoupe({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m20 20-4.3-4.3" />
+    </svg>
   );
 }

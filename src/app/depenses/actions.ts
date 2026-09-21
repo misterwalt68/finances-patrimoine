@@ -143,6 +143,16 @@ export async function actualiserTransactions() {
   revalidatePath("/depenses/trier");
 }
 
+/** Retire une transaction de sa catégorie — elle retourne dans la file "à catégoriser", pas supprimée. */
+export async function declasserTransaction(transactionId: string): Promise<void> {
+  await db
+    .update(transactions)
+    .set({ categorieId: null, statut: "a_categoriser" })
+    .where(eq(transactions.id, transactionId));
+  revalidatePath("/depenses");
+  revalidatePath("/depenses/trier");
+}
+
 /**
  * Outil de développement — remet toutes les transactions catégorisées à
  * "à catégoriser" pour pouvoir retester le tri depuis le début. Ne touche
