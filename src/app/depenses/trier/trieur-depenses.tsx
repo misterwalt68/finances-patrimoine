@@ -22,7 +22,18 @@ const CIBLE_AJOUTER = "__ajouter__";
 const CIBLE_PLUS_TARD = "__plus_tard__";
 const SEUIL_DEPOT = 70; // px de tirage avant qu'une catégorie soit considérée comme ciblée
 const SEUIL_TAP = 8; // px de mouvement max pour qu'un relâchement compte comme un tap, pas un glissement
-const DELAI_BULLE = 200; // ms d'appui avant que la carte se rétracte en bulle
+const DELAI_SAISIE = 200; // ms d'appui avant qu'une carte soit considérée "en cours de déplacement"
+// Variation d'alignement par profondeur (éventail façon maquette de
+// référence) — décalage horizontal + rotation légère, en plus du décalage
+// vertical qui garde chaque carte lisible.
+const EVENTAIL: { x: number; r: number }[] = [
+  { x: 0, r: 0 },
+  { x: 14, r: 2.5 },
+  { x: -12, r: -2 },
+  { x: 18, r: 3.5 },
+  { x: -16, r: -3 },
+  { x: 10, r: 2 },
+];
 
 const formatEur = (n: number) =>
   n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -53,7 +64,7 @@ export function TrieurDepenses({
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [enTirage, setEnTirage] = useState(false);
-  const [enBulle, setEnBulle] = useState(false);
+  const [enSaisie, setEnSaisie] = useState(false);
   const [survole, setSurvole] = useState<string | null>(null);
   const [categorieOuverte, setCategorieOuverte] = useState<CategorieAvecTransactions | null>(null);
   const [creationPour, setCreationPour] = useState<TransactionLegere | null>(null);
@@ -61,12 +72,12 @@ export function TrieurDepenses({
 
   const debut = useRef<{ x: number; y: number } | null>(null);
   const ciblesRef = useRef(new Map<string, HTMLElement>());
-  const minuteurBulle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const minuteurSaisie = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function annulerMinuteurBulle() {
-    if (minuteurBulle.current) {
-      clearTimeout(minuteurBulle.current);
-      minuteurBulle.current = null;
+  function annulerMinuteurSaisie() {
+    if (minuteurSaisie.current) {
+      clearTimeout(minuteurSaisie.current);
+      minuteurSaisie.current = null;
     }
   }
 
@@ -83,11 +94,13 @@ export function TrieurDepenses({
     e.currentTarget.setPointerCapture(e.pointerId);
     debut.current = { x: e.clientX, y: e.clientY };
     setEnTirage(true);
-    setEnBulle(false);
-    annulerMinuteurBulle();
-    // Un appui maintenu, même sans bouger, rétracte la carte en bulle — pas
-    // besoin de glisser pour déclencher le mode "transport", juste tenir.
-    minuteurBulle.current = setTimeout(() => setEnBulle(true), DELAI_BULLE);
+    setEnSaisie(false);
+    annulerMinuteurSaisie();
+    // Un appui maintenu, même sans bouger, passe en mode "saisie" (fait
+    // apparaître les zones de dépôt sur les bords, estompe les autres
+    // cartes) — pas besoin de glisser pour déclencher le transport, juste
+    // tenir.
+    minuteurSaisie.current = setTimeout(() => setEnSaisie(true), DELAI_SAISIE);
   }
 
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
@@ -98,9 +111,9 @@ export function TrieurDepenses({
     const distance = Math.hypot(dx, dy);
     // Un mouvement franc avant même la fin du délai vaut aussi pour un
     // glissement volontaire — pas besoin d'attendre le minuteur.
-    if (distance > SEUIL_TAP && minuteurBulle.current) {
-      annulerMinuteurBulle();
-      setEnBulle(true);
+    if (distance > SEUIL_TAP && minuteurSaisie.current) {
+      annulerMinuteurSaisie();
+      setEnSaisie(true);
     }
     if (distance < SEUIL_DEPOT) {
       setSurvole(null);
@@ -143,26 +156,26 @@ export function TrieurDepenses({
   function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
     if (!enTirage) return;
     setEnTirage(false);
-    annulerMinuteurBulle();
+    annulerMinuteurSaisie();
     debut.current = null;
     const transaction = pile[0];
     const distance = Math.hypot(offset.x, offset.y);
     const cible = distance >= SEUIL_DEPOT ? trouverCible(e.clientX, e.clientY) : null;
-    const etaitEnBulle = enBulle;
+    const etaitEnSaisie = enSaisie;
     setSurvole(null);
     // Remis à zéro avant toute chose, y compris quand un dépôt réussit —
     // sinon la carte suivante, qui devient "la carte du dessus" dès ce
-    // rendu, hérite du mode bulle du geste précédent et apparaît déjà
-    // rétractée sans qu'on l'ait touchée.
+    // rendu, hérite du mode saisie du geste précédent.
     setOffset({ x: 0, y: 0 });
-    setEnBulle(false);
+    setEnSaisie(false);
     if (cible && transaction) {
       void deposerSur(cible, transaction);
       return;
     }
-    if (!etaitEnBulle && distance < SEUIL_TAP && transaction) {
-      // Relâché quasi sur place, sans être passé par la bulle : un tap,
-      // pas un geste de tri — on ouvre le détail plutôt que de le glisser.
+    if (!etaitEnSaisie && distance < SEUIL_TAP && transaction) {
+      // Relâché quasi sur place, sans être passé par le mode saisie : un
+      // tap, pas un geste de tri — on ouvre le détail plutôt que de le
+      // glisser.
       setDetailOuvert(transaction);
     }
   }
@@ -226,7 +239,7 @@ export function TrieurDepenses({
       </div>
 
       {/* Bulles de catégories — uniquement celles du même type (revenu/charge) que la carte du dessus */}
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
+      <div className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-5">
         {categoriesAffichees.slice(0, Math.ceil(categoriesAffichees.length / 2)).map((c) => (
           <BulleCategorie
             key={c.id}
@@ -244,9 +257,13 @@ export function TrieurDepenses({
 
       {/*
        * Pile en éventail façon maquette de référence : chaque carte derrière
-       * la première est décalée verticalement assez pour rester lisible
-       * (commerçant, date, montant), pas juste un liseré de quelques pixels.
-       * Seule la carte du dessus est saisissable et affiche poignée + loupe.
+       * la première est décalée verticalement (reste lisible : commerçant,
+       * date, montant) avec une variation d'alignement (léger décalage
+       * horizontal + rotation) pour casser l'effet "file indienne". Seule la
+       * carte du dessus est saisissable et affiche poignée + loupe. Pendant
+       * la saisie, les autres cartes s'estompent (opacité) plutôt que de se
+       * flouter — c'est ce contraste, plus une lueur renforcée sur la carte
+       * transportée, qui la démarque du reste.
        */}
       <div
         className="relative mx-auto mt-6 max-w-xs select-none"
@@ -264,87 +281,71 @@ export function TrieurDepenses({
             .map((t, i, arr) => {
               const profondeur = arr.length - 1 - i;
               const estLaCarteDuDessus = profondeur === 0;
-              const commeUneBulle = estLaCarteDuDessus && enBulle;
+              const eventail = EVENTAIL[profondeur] ?? EVENTAIL[EVENTAIL.length - 1];
               return (
                 <div
                   key={t.id}
                   onPointerDown={estLaCarteDuDessus ? onPointerDown : undefined}
                   onPointerMove={estLaCarteDuDessus ? onPointerMove : undefined}
                   onPointerUp={estLaCarteDuDessus ? onPointerUp : undefined}
-                  className={
-                    commeUneBulle
-                      ? "absolute left-1/2 top-1/2 flex h-20 w-20 items-center justify-center rounded-full border-2 bg-accent/20 backdrop-blur-md glow-tri-actif"
-                      : `absolute inset-x-0 top-0 overflow-hidden rounded-2xl border bg-surface shadow-lg shadow-black/20 ${
-                          estLaCarteDuDessus ? "glow-tri" : "border-line"
-                        }`
-                  }
+                  className={`absolute left-1/2 top-0 w-[90%] overflow-hidden rounded-2xl border bg-surface shadow-lg shadow-black/20 ${
+                    estLaCarteDuDessus ? (enSaisie ? "glow-tri-actif" : "glow-tri") : "border-line"
+                  }`}
                   style={{
-                    height: commeUneBulle ? undefined : CARTE_H,
+                    height: CARTE_H,
                     zIndex: 10 - profondeur,
-                    transform: commeUneBulle
-                      ? `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`
-                      : estLaCarteDuDessus
-                        ? `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
-                        : `translateY(${profondeur * REVELATION}px)`,
-                    // Seule la carte juste derrière celle en cours de tri se
-                    // floute quand elle bascule en bulle — les autres, plus
-                    // loin dans la pile, restent lisibles.
-                    filter: enBulle && profondeur === 1 ? "blur(5px)" : undefined,
+                    opacity: enSaisie && !estLaCarteDuDessus ? 0.3 : 1,
+                    transform: estLaCarteDuDessus
+                      ? `translate(-50%, 0) translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`
+                      : `translate(-50%, ${profondeur * REVELATION}px) translate(${eventail.x}px, 0) rotate(${eventail.r}deg)`,
                     transition:
-                      enTirage && estLaCarteDuDessus ? "filter 0.15s ease-out" : "transform 0.25s ease-out, filter 0.15s ease-out",
+                      enTirage && estLaCarteDuDessus ? "opacity 0.15s ease-out" : "transform 0.25s ease-out, opacity 0.15s ease-out",
                     touchAction: "none",
                     cursor: estLaCarteDuDessus ? "grab" : undefined,
                   }}
                 >
-                  {commeUneBulle ? (
-                    <span className="text-sm font-semibold text-foreground">
-                      {t.montant >= 0 ? "+" : ""}
-                      {formatEur(t.montant)}
-                    </span>
-                  ) : (
-                    <div
-                      className={
-                        estLaCarteDuDessus
-                          ? "flex h-full items-center gap-3 p-4"
-                          : // Cartes derrière la première : seul le bas de leur
-                            // boîte dépasse de sous la carte du dessus (celle-ci
-                            // les recouvre à mesure qu'on s'enfonce dans la
-                            // pile) — le contenu est donc ancré en bas, pas
-                            // centré, sinon il resterait caché sous la carte de
-                            // devant.
-                            "absolute inset-x-0 bottom-0 flex items-center gap-3 p-4"
-                      }
-                    >
-                      <IconeAvatar />
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="truncate font-medium text-foreground">{t.commercant ?? "Sans libellé"}</p>
-                          {estLaCarteDuDessus && <IconePoignee />}
-                        </div>
-                        <span className="mt-0.5 text-sm text-muted">{formatDate(t.date)}</span>
+                  <div
+                    className={
+                      estLaCarteDuDessus
+                        ? "flex h-full items-center gap-3 p-4"
+                        : // Cartes derrière la première : seul le bas de leur
+                          // boîte dépasse de sous la carte du dessus (celle-ci
+                          // les recouvre à mesure qu'on s'enfonce dans la
+                          // pile) — le contenu est donc ancré en bas, pas
+                          // centré, sinon il resterait caché sous la carte de
+                          // devant.
+                          "absolute inset-x-0 bottom-0 flex items-center gap-3 p-4"
+                    }
+                  >
+                    <IconeAvatar />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate font-medium text-foreground">{t.commercant ?? "Sans libellé"}</p>
+                        {estLaCarteDuDessus && <IconePoignee />}
                       </div>
-                      <div className="flex shrink-0 items-start gap-2">
-                        <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
-                          {t.montant >= 0 ? "+" : ""}
-                          {formatEur(t.montant)}
-                        </span>
-                        {estLaCarteDuDessus && (
-                          <button
-                            type="button"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDetailOuvert(t);
-                            }}
-                            aria-label="Voir le détail"
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
-                          >
-                            <IconeLoupe className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
+                      <span className="mt-0.5 text-sm text-muted">{formatDate(t.date)}</span>
                     </div>
-                  )}
+                    <div className="flex shrink-0 items-start gap-2">
+                      <span className={`font-semibold ${t.montant >= 0 ? "text-positive" : "text-foreground"}`}>
+                        {t.montant >= 0 ? "+" : ""}
+                        {formatEur(t.montant)}
+                      </span>
+                      {estLaCarteDuDessus && (
+                        <button
+                          type="button"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailOuvert(t);
+                          }}
+                          aria-label="Voir le détail"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
+                        >
+                          <IconeLoupe className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })
@@ -357,7 +358,7 @@ export function TrieurDepenses({
       )}
 
       {/* Bulles de catégories — suite (même filtre par type) */}
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
+      <div className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-5">
         {categoriesAffichees.slice(Math.ceil(categoriesAffichees.length / 2)).map((c) => (
           <BulleCategorie
             key={c.id}
@@ -376,8 +377,8 @@ export function TrieurDepenses({
       {/*
        * Demi-ovales discrets, plaqués contre les bords de l'écran (bord droit
        * de la forme = bord de l'écran, pas de débordement) — invisibles au
-       * repos, elles n'apparaissent que quand une carte est soulevée en
-       * bulle (`enBulle`), pour ne jamais gêner la lecture normale de
+       * repos, elles n'apparaissent que quand une carte est en cours de
+       * saisie (`enSaisie`), pour ne jamais gêner la lecture normale de
        * l'écran. Beaucoup plus hautes que larges, sur le modèle d'une appli
        * de swipe façon Tinder, mais discret plutôt qu'un gros cercle.
        */}
@@ -387,7 +388,7 @@ export function TrieurDepenses({
           else ciblesRef.current.delete(CIBLE_AJOUTER);
         }}
         className={`fixed top-1/2 left-0 z-40 flex h-56 w-16 -translate-y-1/2 items-center justify-center rounded-r-full border-2 border-l-0 border-line bg-surface pr-2 transition-all duration-150 ${
-          enBulle ? "opacity-100" : "pointer-events-none opacity-0"
+          enSaisie ? "opacity-100" : "pointer-events-none opacity-0"
         } ${survole === CIBLE_AJOUTER ? "glow-tri-actif scale-110 bg-accent/10" : ""}`}
       >
         <div className="flex flex-col items-center gap-1 text-center">
@@ -407,7 +408,7 @@ export function TrieurDepenses({
           else ciblesRef.current.delete(CIBLE_PLUS_TARD);
         }}
         className={`fixed top-1/2 right-0 z-40 flex h-56 w-16 -translate-y-1/2 items-center justify-center rounded-l-full border-2 border-r-0 border-line bg-surface pl-2 transition-all duration-150 ${
-          enBulle ? "opacity-100" : "pointer-events-none opacity-0"
+          enSaisie ? "opacity-100" : "pointer-events-none opacity-0"
         } ${survole === CIBLE_PLUS_TARD ? "glow-tri-actif scale-110 bg-accent/10" : ""}`}
       >
         <div className="flex flex-col items-center gap-1 text-center">
@@ -500,6 +501,13 @@ export function TrieurDepenses({
   );
 }
 
+/**
+ * Bulle de catégorie façon maquette de référence : une vraie capsule (plate
+ * en haut et en bas, arrondie sur les côtés — `rounded-full` sur un
+ * rectangle produit exactement cette forme), contour vert toujours visible
+ * (pas seulement au survol), et le nombre de transactions dans une petite
+ * pastille qui déborde du bas du contour plutôt qu'affiché en texte normal.
+ */
 const BulleCategorie = forwardRef<
   HTMLButtonElement,
   { categorie: CategorieAvecTransactions; compte: number; survolee: boolean; onClick: () => void }
@@ -509,15 +517,15 @@ const BulleCategorie = forwardRef<
       type="button"
       ref={ref}
       onClick={onClick}
-      className={`flex flex-col items-center gap-1.5 rounded-2xl border border-line bg-surface px-4 py-3 transition-all ${
-        survolee ? "glow-tri-actif scale-110 bg-accent/10" : ""
+      className={`relative flex flex-col items-center gap-1 rounded-full border-2 bg-surface px-5 py-3 transition-all ${
+        survolee ? "glow-tri-actif scale-110 bg-accent/10" : "glow-tri"
       }`}
     >
-      <span className={`flex h-11 w-11 items-center justify-center rounded-full ${survolee ? "bg-accent/20 text-accent" : "bg-background text-accent"}`}>
-        <IconeCategorie icone={categorie.icone} />
-      </span>
+      <IconeCategorie icone={categorie.icone} className="h-5 w-5 text-accent" />
       <span className="text-sm font-medium text-foreground">{categorie.libelle}</span>
-      <span className="text-xs text-muted">{compte}</span>
+      <span className="absolute -bottom-2.5 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border-2 border-background bg-accent text-[11px] font-semibold text-accent-foreground">
+        {compte}
+      </span>
     </button>
   );
 });
