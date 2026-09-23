@@ -204,15 +204,32 @@ export async function synchroniserTransactionsBancaires(): Promise<void> {
           .filter((ref): ref is string => ref !== null),
       );
 
+      // Certaines banques (Trade Republic, vérifié en direct) renvoient un
+      // `continuation_key` qui n'avance jamais — la même page revient à
+      // l'infini quel que soit ce qu'on leur redemande. Une borne dure évite
+      // que la synchro tourne indéfiniment sur ce genre de réponse cassée ;
+      // 20 pages (2000 transactions) couvre largement un usage normal.
+      const MAX_PAGES = 20;
       let curseur: string | undefined;
+      let page = 0;
       do {
+        page++;
         const { transactions: lot, continuationKey } = await obtenirTransactionsBancaires(uid, EB_SANDBOX, {
           dateDepuis,
           continuationKey: curseur,
         });
 
+        // Filtre défensif : certaines banques ignorent purement et
+        // simplement `dateDepuis` et renvoient tout leur historique
+        // disponible quel que soit ce qu'on demande (Trade Republic,
+        // vérifié en direct) — on ne persiste jamais rien avant la date de
+        // démarrage de l'application, peu importe ce que la banque renvoie.
         const nouvelles = lot.filter(
-          (t) => t.date && t.identifiantExterne && !existantes.has(t.identifiantExterne),
+          (t) =>
+            t.date &&
+            t.date >= DATE_DEMARRAGE_APPLICATION &&
+            t.identifiantExterne &&
+            !existantes.has(t.identifiantExterne),
         );
         if (nouvelles.length > 0) {
           await db.insert(transactions).values(
@@ -230,7 +247,7 @@ export async function synchroniserTransactionsBancaires(): Promise<void> {
         }
 
         curseur = continuationKey ?? undefined;
-      } while (curseur);
+      } while (curseur && page < MAX_PAGES);
     }),
   );
 }
