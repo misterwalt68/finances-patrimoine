@@ -523,15 +523,15 @@ export function TrieurDepenses({
       {categorieOuverte && (
         <ModaleCategorie
           categorie={categorieOuverte}
-          onFerme={(donnees) => {
-            if (donnees) {
-              setCategoriesListe((liste) =>
-                liste.map((c) => (c.id === categorieOuverte.id ? { ...c, ...donnees } : c)),
-              );
-            }
-            setCategorieOuverte(null);
+          onFermer={() => setCategorieOuverte(null)}
+          onModifie={(donnees) => {
+            setCategoriesListe((liste) =>
+              liste.map((c) => (c.id === categorieOuverte.id ? { ...c, ...donnees } : c)),
+            );
+            setCategorieOuverte((co) => (co ? { ...co, ...donnees } : co));
           }}
           onDeclasser={(transaction) => declasser(transaction, categorieOuverte.id)}
+          onVoirDetail={(transaction) => setDetailOuvert(transaction)}
         />
       )}
 
@@ -607,15 +607,27 @@ const BulleCategorie = forwardRef<
   );
 });
 
+/**
+ * S'ouvre en lecture — libellé + crayon pour passer en édition, plutôt que
+ * le formulaire de renommage directement affiché. Éditer puis enregistrer
+ * revient à la vue lecture (la modale reste ouverte, seul le X la ferme) ;
+ * taper sur une transaction de la liste ouvre son détail (montant, date,
+ * compte), pas seulement le bouton "Déclasser".
+ */
 function ModaleCategorie({
   categorie,
-  onFerme,
+  onFermer,
+  onModifie,
   onDeclasser,
+  onVoirDetail,
 }: {
   categorie: CategorieAvecTransactions;
-  onFerme: (donnees: { libelle: string; icone: string } | null) => void;
+  onFermer: () => void;
+  onModifie: (donnees: { libelle: string; icone: string }) => void;
   onDeclasser: (transaction: TransactionLegere) => void;
+  onVoirDetail: (transaction: TransactionLegere) => void;
 }) {
+  const [enEdition, setEnEdition] = useState(false);
   const [libelle, setLibelle] = useState(categorie.libelle);
 
   async function enregistrer(formData: FormData) {
@@ -623,39 +635,65 @@ function ModaleCategorie({
     formData.set("libelle", libelle);
     const icone = String(formData.get("icone") ?? categorie.icone ?? "autre");
     await modifierCategorie(formData);
-    onFerme({ libelle, icone });
+    onModifie({ libelle, icone });
+    setEnEdition(false);
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={() => onFerme(null)}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={onFermer}>
       <div
         className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-line bg-surface p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-foreground">Modifier la catégorie</p>
-            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">
-              {categorie.type === "revenu" ? "Revenu" : "Charge"}
-            </span>
+        {enEdition ? (
+          <>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-medium text-foreground">Modifier la catégorie</p>
+              <button
+                type="button"
+                onClick={() => setEnEdition(false)}
+                aria-label="Annuler"
+                className="rounded p-1 text-muted hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+            <form action={enregistrer} className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  value={libelle}
+                  onChange={(e) => setLibelle(e.target.value)}
+                  autoFocus
+                  className="h-11 flex-1 rounded-lg border border-line bg-background px-4 text-base text-foreground outline-none focus:border-accent"
+                />
+                <Bouton type="submit" className="shrink-0">
+                  Enregistrer
+                </Bouton>
+              </div>
+              <SelecteurIconeCategorie name="icone" defaultValue={categorie.icone ?? "autre"} />
+            </form>
+          </>
+        ) : (
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-foreground">{categorie.libelle}</p>
+              <button
+                type="button"
+                onClick={() => setEnEdition(true)}
+                aria-label="Modifier la catégorie"
+                className="rounded p-1 text-muted hover:text-foreground"
+              >
+                <IconeCrayon className="h-4 w-4" />
+              </button>
+              <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">
+                {categorie.type === "revenu" ? "Revenu" : "Charge"}
+              </span>
+            </div>
+            <button type="button" onClick={onFermer} aria-label="Fermer" className="rounded p-1 text-muted hover:text-foreground">
+              ✕
+            </button>
           </div>
-          <button type="button" onClick={() => onFerme(null)} aria-label="Fermer" className="rounded p-1 text-muted hover:text-foreground">
-            ✕
-          </button>
-        </div>
-        <form action={enregistrer} className="space-y-3">
-          <div className="flex gap-2">
-            <input
-              value={libelle}
-              onChange={(e) => setLibelle(e.target.value)}
-              className="h-11 flex-1 rounded-lg border border-line bg-background px-4 text-base text-foreground outline-none focus:border-accent"
-            />
-            <Bouton type="submit" className="shrink-0">
-              Enregistrer
-            </Bouton>
-          </div>
-          <SelecteurIconeCategorie name="icone" defaultValue={categorie.icone ?? "autre"} />
-        </form>
+        )}
 
         <p className="mt-4 mb-2 text-xs font-medium uppercase tracking-wide text-muted">
           {categorie.transactions.length} transaction{categorie.transactions.length > 1 ? "s" : ""}
@@ -666,20 +704,24 @@ function ModaleCategorie({
           <ul className="divide-y divide-line">
             {categorie.transactions.map((t) => (
               <li key={t.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                <span className="truncate text-foreground">{t.commercant ?? "Sans libellé"}</span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <span className={t.montant >= 0 ? "text-positive" : "text-muted"}>
+                <button
+                  type="button"
+                  onClick={() => onVoirDetail(t)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                >
+                  <span className="truncate text-foreground">{t.commercant ?? "Sans libellé"}</span>
+                  <span className={`shrink-0 ${t.montant >= 0 ? "text-positive" : "text-muted"}`}>
                     {t.montant >= 0 ? "+" : ""}
                     {formatEur(t.montant)}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => onDeclasser(t)}
-                    className="rounded-full border border-line px-2 py-0.5 text-xs text-muted transition-colors hover:border-negative hover:text-negative"
-                  >
-                    Déclasser
-                  </button>
-                </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeclasser(t)}
+                  className="shrink-0 rounded-full border border-line px-2 py-0.5 text-xs text-muted transition-colors hover:border-negative hover:text-negative"
+                >
+                  Déclasser
+                </button>
               </li>
             ))}
           </ul>
@@ -719,6 +761,23 @@ function IconeLoupe({ className }: { className?: string }) {
     >
       <circle cx="10.5" cy="10.5" r="6.5" />
       <path d="m20 20-4.3-4.3" />
+    </svg>
+  );
+}
+
+function IconeCrayon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     </svg>
   );
 }
