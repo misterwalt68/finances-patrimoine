@@ -155,13 +155,14 @@ async function chargerHistoriqueMetaux(): Promise<void> {
 
 /**
  * Date de démarrage officielle de l'application (décision explicite de
- * Maxime, 2026-09-23) — aucune transaction antérieure n'est plus jamais
- * importée, même pour un tout premier import sur un compte nouvellement
- * connecté. Avant cette date, le point de départ était glissant ("30 jours
- * avant aujourd'hui"), ce qui ramenait sans cesse de vieilles transactions
- * à trier ; un plancher fixe évite ça une bonne fois pour toutes.
+ * Maxime, revue le 2026-09-23) — aucune transaction antérieure n'est plus
+ * jamais importée, même pour un tout premier import sur un compte
+ * nouvellement connecté. Avant la toute première version de cette
+ * constante, le point de départ était glissant ("30 jours avant
+ * aujourd'hui"), ce qui ramenait sans cesse de vieilles transactions à
+ * trier ; un plancher fixe évite ça une bonne fois pour toutes.
  */
-const DATE_DEMARRAGE_APPLICATION = "2026-09-21";
+const DATE_DEMARRAGE_APPLICATION = "2026-09-23";
 
 /**
  * Synchronise les transactions bancaires (DSP2, SPEC.md §5.1/§10) de chaque
