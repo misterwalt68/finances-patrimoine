@@ -154,12 +154,22 @@ async function chargerHistoriqueMetaux(): Promise<void> {
 }
 
 /**
+ * Date de démarrage officielle de l'application (décision explicite de
+ * Maxime, 2026-09-23) — aucune transaction antérieure n'est plus jamais
+ * importée, même pour un tout premier import sur un compte nouvellement
+ * connecté. Avant cette date, le point de départ était glissant ("30 jours
+ * avant aujourd'hui"), ce qui ramenait sans cesse de vieilles transactions
+ * à trier ; un plancher fixe évite ça une bonne fois pour toutes.
+ */
+const DATE_DEMARRAGE_APPLICATION = "2026-09-21";
+
+/**
  * Synchronise les transactions bancaires (DSP2, SPEC.md §5.1/§10) de chaque
  * compte rattaché à une connexion Enable Banking (`comptes.enableBankingAccountId`
  * non nul). Incrémental : ne récupère que ce qui est postérieur à la
- * dernière transaction déjà connue pour ce compte, 30 jours en arrière au
- * tout premier import — jamais tout l'historique bancaire d'un coup, à la
- * demande explicite de Maxime ("pas trop flood").
+ * dernière transaction déjà connue pour ce compte, jamais avant
+ * `DATE_DEMARRAGE_APPLICATION` au tout premier import — jamais tout
+ * l'historique bancaire d'un coup, à la demande explicite de Maxime.
  *
  * `entry_reference` sert de clé de déduplication entre deux synchros :
  * `transaction_id` est vérifié en direct comme toujours vide chez
@@ -181,8 +191,7 @@ export async function synchroniserTransactionsBancaires(): Promise<void> {
         .where(and(eq(transactions.compteId, compte.id), eq(transactions.source, "psd2")))
         .orderBy(desc(transactions.date))
         .limit(1);
-      const dateDepuis =
-        derniere?.date ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const dateDepuis = derniere?.date ?? DATE_DEMARRAGE_APPLICATION;
 
       const existantes = new Set(
         (
